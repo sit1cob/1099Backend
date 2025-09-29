@@ -3,6 +3,7 @@ import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { VendorModel } from '../models/vendor';
 import { OrderModel } from '../models/order';
 import { JobAssignmentModel } from '../models/jobAssignment';
+import { JobModel } from '../models/job';
 
 export const vendorsRouter = Router();
 
@@ -41,33 +42,74 @@ vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Mapping helper (kept local to this file)
+function mapToJobDTO(doc: any) {
+  const soNumber = doc.soNumber || doc.raw?.SO_NO || `SO-${String(doc._id).slice(-6)}`;
+  const customerName: string | undefined = doc.customerName || doc.raw?.CUS_NM || undefined;
+  let firstName: string | undefined = customerName;
+  let lastName: string | undefined = undefined;
+  if (customerName && customerName.includes(' ')) {
+    const parts = String(customerName).split(/\s+/);
+    firstName = parts.shift();
+    lastName = parts.join(' ') || undefined;
+  }
+  return {
+    id: String(doc._id),
+    soNumber,
+    customerName: firstName || customerName || null,
+    customerLastName: lastName || null,
+    customerCity: doc.customerCity || doc.raw?.CUS_CTY_NM || null,
+    customerState: doc.customerState || doc.raw?.CUS_ST_CD || null,
+    customerZip: doc.customerZip || doc.raw?.ZIP_CD || doc.raw?.CN_ZIP_PC || null,
+    applianceType: doc.applianceType || doc.raw?.HS_SP_CD || doc.raw?.SPECIALTY || null,
+    serviceDescription: doc.serviceDescription || doc.raw?.SVC_RQ_DS || doc.raw?.REPAIR_TYPE || null,
+    scheduledDate: doc.scheduledDate || (doc.raw?.SVC_SCH_DT ? new Date(doc.raw.SVC_SCH_DT) : null),
+    scheduledTimeWindow: doc.scheduledTimeWindow || null,
+    priority: doc.priority || 'medium',
+    status: 'available' as const,
+  };
+}
+
 // GET /api/vendors/me/jobs
-// Returns available jobs (orders) for this vendor, filtered by vendor name
+// Returns jobs for this vendor (same shape as /api/jobs/available), with pagination
 vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
   try {
     if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
     const vendor = await VendorModel.findById(req.user.vendorId).lean();
     if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
 
-    const vendorName = vendor.name;
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || '20'), 10)));
 
-    const orders = await OrderModel.find({ vendorName }).sort({ scheduledDate: -1 }).limit(1000).lean();
+    // Prefer jobs collection filtered by vendorName
+    const filter = { vendorName: vendor.name } as any;
+    let total = await JobModel.countDocuments(filter);
+    let docs = await JobModel.find(filter)
+      .sort({ scheduledDate: -1, createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .lean();
 
-    // Map to DTO similar to previous API
-    const data = orders.map((o) => ({
-      id: String(o._id),
-      soNumber: o.soNumber || o.raw?.SO_NO || `SO-${String(o._id).slice(-6)}`,
-      customerCity: o.customerCity || o.raw?.CUS_CTY_NM || 'Unknown City',
-      customerState: o.customerState || o.raw?.CUS_ST_CD || null,
-      customerZip: o.customerZip || o.raw?.ZIP_CD || o.raw?.CN_ZIP_PC || '00000',
-      scheduledDate: o.scheduledDate || (o.raw?.SVC_SCH_DT ? new Date(o.raw.SVC_SCH_DT) : null),
-      applianceType: o.raw?.HS_SP_CD || o.raw?.SPECIALTY || 'General Service',
-      manufacturerBrand: o.raw?.MFG_BND_NM || null,
-      serviceDescription: o.raw?.SVC_RQ_DS || o.raw?.REPAIR_TYPE || null,
-      status: 'available' as const,
-    }));
+    // Fallback to legacy orders if no jobs
+    if (total === 0) {
+      total = await OrderModel.countDocuments({ vendorName: vendor.name });
+      docs = await OrderModel.find({ vendorName: vendor.name })
+        .sort({ scheduledDate: -1, createdAt: -1 })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize)
+        .lean() as any[];
+    }
 
-    return res.json({ success: true, data, count: data.length });
+    const jobs = (docs as any[]).map(mapToJobDTO);
+    const totalPages = Math.ceil(total / pageSize) || 1;
+
+    return res.json({
+      success: true,
+      data: {
+        jobs,
+        pagination: { page, pageSize, total, totalPages },
+      },
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor jobs' });
   }
