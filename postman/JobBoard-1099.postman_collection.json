@@ -260,7 +260,11 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "jobs", "{{jobId}}", "claims"]
             },
-            "body": { "mode": "raw", "raw": "{}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorNotes\": \"I can handle this repair\",\n  \"action\": \"accept\"\n}"
+            },
+            "description": "Vendor claims an available job. Body supports vendorNotes and action (accept | decline)."
           }
         }
       ]

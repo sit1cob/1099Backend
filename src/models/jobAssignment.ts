@@ -9,6 +9,8 @@ const JobAssignmentSchema = new Schema({
   arrivedAt: { type: Date },
   completedAt: { type: Date },
   completionNotes: { type: String },
+  vendorNotes: { type: String },
+  action: { type: String, enum: ['accept', 'decline', 'assigned'], default: 'assigned' },
 }, { timestamps: true });
 
 export const JobAssignmentModel = mongoose.models.JobAssignment || mongoose.model('JobAssignment', JobAssignmentSchema);

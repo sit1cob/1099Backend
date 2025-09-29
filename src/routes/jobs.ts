@@ -103,13 +103,41 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
 
     const jobObjectId = new mongoose.Types.ObjectId(id);
 
+    // Ensure the job exists either in jobs or orders (legacy)
+    const job = await JobModel.findById(jobObjectId).lean();
+    const order = job ? null : await OrderModel.findById(jobObjectId).lean();
+    if (!job && !order) return res.status(404).json({ success: false, message: 'Job not found' });
+
+    const { vendorNotes, action } = (req.body || {}) as { vendorNotes?: string; action?: string };
+    const normalizedAction = (action || 'accept').toLowerCase();
+    if (!['accept', 'decline'].includes(normalizedAction)) {
+      return res.status(400).json({ success: false, message: "action must be 'accept' or 'decline'" });
+    }
+
     // Prevent duplicate claim by same vendor
     const existing = await JobAssignmentModel.findOne({ jobId: jobObjectId, vendorId: req.user.vendorId }).lean();
     if (existing) return res.status(409).json({ success: false, message: 'Job already claimed by this vendor' });
 
-    const assignment = await JobAssignmentModel.create({ jobId: jobObjectId, vendorId: req.user.vendorId, status: 'assigned' });
+    const payload: any = {
+      jobId: jobObjectId,
+      vendorId: req.user.vendorId,
+      status: normalizedAction === 'accept' ? 'assigned' : 'declined',
+      vendorNotes,
+      action: normalizedAction,
+    };
+    const assignment = await JobAssignmentModel.create(payload);
 
-    return res.status(201).json({ success: true, data: { assignmentId: String(assignment._id) }, message: 'Job claimed successfully' });
+    return res.status(201).json({
+      success: true,
+      message: normalizedAction === 'accept' ? 'Job successfully claimed' : 'Job declined',
+      data: {
+        assignmentId: String(assignment._id),
+        jobId: String(assignment.jobId),
+        vendorId: String(assignment.vendorId),
+        status: assignment.status,
+        claimedAt: assignment.assignedAt?.toISOString?.() || new Date().toISOString(),
+      },
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to claim job' });
   }
