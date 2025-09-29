@@ -13,6 +13,33 @@ authRouter.post('/login', async (req, res) => {
     const { username, password: pwd, role, fcmToken } = req.body || {};
     if (!username || !pwd) return res.status(400).json({ success: false, message: 'username and password required' });
 
+// POST /api/auth/logout
+// Body: { fcmToken?: string }
+authRouter.post('/logout', authenticateJWT(), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { fcmToken } = (req.body || {}) as { fcmToken?: string };
+
+    const updates: any = {};
+    if (typeof fcmToken === 'string' && fcmToken.trim()) {
+      updates.$pull = { fcmTokens: fcmToken.trim() };
+      // Only unset last token fields if the provided token matches the last
+      const user = await UserModel.findById(userId).select('lastFcmToken').lean();
+      if (user?.lastFcmToken === fcmToken.trim()) {
+        updates.$unset = { lastFcmToken: '', lastFcmAt: '' };
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await UserModel.updateOne({ _id: userId }, updates);
+    }
+
+    return res.json({ success: true, message: 'Logged out' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Logout failed' });
+  }
+});
+
     const user = await UserModel.findOne({ username }).lean();
     if (!user || !user.passwordHash) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 

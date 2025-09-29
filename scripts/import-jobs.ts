@@ -4,6 +4,8 @@ import fs from 'fs';
 import XLSX from 'xlsx';
 import { connectMongo, disconnectMongo } from '../src/mongo/connection';
 import { JobModel } from '../src/models/job';
+import { UserModel } from '../src/models/user';
+import { sendMulticast, chunk } from '../src/services/fcm';
 
 const DEFAULT_FILE = path.join(process.cwd(), '..', 'docs', '2025-09-25 2_35pm.csv');
 
@@ -33,10 +35,13 @@ async function main() {
   const sheet = wb.SheetNames[0];
   const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { defval: '' });
 
+  const notify = process.argv.includes('--notify');
   let count = 0;
+  const newlyCreatedJobSummaries: { soNumber?: string; customerCity?: string; vendorName?: string }[] = [];
   for (const row of rows) {
     const soNumber = pickFirst<string>(row, ['SO_NO', 'so_number', 'SO#', 'SO', 'SO Number']);
     const serviceUnitNumber = pickFirst<string>(row, ['SVC_UN_NO', 'service_unit_number']);
+    const vendorName = pickFirst<string>(row, ['VENDOR', 'Vendor', 'vendor']);
     const customerCity = pickFirst<string>(row, ['CUS_CTY_NM', 'customer_city', 'City']);
     const customerState = pickFirst<string>(row, ['CUS_ST_CD', 'customer_state', 'State']);
     const customerZip = pickFirst<string>(row, ['ZIP_CD', 'CN_ZIP_PC', 'customer_zip', 'Zip']);
@@ -51,6 +56,7 @@ async function main() {
     const doc = {
       soNumber,
       serviceUnitNumber,
+      vendorName,
       customerCity,
       customerState,
       customerZip,
@@ -69,16 +75,41 @@ async function main() {
       continue;
     }
 
-    await JobModel.updateOne(
+    const res = await JobModel.updateOne(
       { soNumber },
       { $set: doc, $setOnInsert: { createdAt: new Date() } },
       { upsert: true }
     );
+    if (notify && res.upsertedCount && res.upsertedCount > 0) {
+      newlyCreatedJobSummaries.push({ soNumber, customerCity, vendorName });
+    }
     count++;
   }
 
   await disconnectMongo();
   console.log(`Imported/Upserted ${count} jobs from ${path.basename(inputFile)} into 'jobs' collection`);
+
+  if (notify && newlyCreatedJobSummaries.length > 0) {
+    // Fetch unique FCM tokens
+    const users = await UserModel.find({ fcmTokens: { $exists: true, $ne: [] } }).select('fcmTokens').lean();
+    const tokenSet = new Set<string>();
+    for (const u of users as any[]) {
+      for (const t of (u.fcmTokens || []) as string[]) {
+        if (t) tokenSet.add(t);
+      }
+    }
+    const tokens = Array.from(tokenSet);
+
+    const title = 'New jobs available';
+    const body = `${newlyCreatedJobSummaries.length} new job(s) added`;
+    let success = 0, failure = 0;
+    for (const batch of chunk(tokens, 500)) {
+      const res = await sendMulticast(batch, { title, body, data: { type: 'new_jobs' } });
+      success += res.successCount || 0;
+      failure += res.failureCount || 0;
+    }
+    console.log(`[FCM] Sent notifications: success=${success}, failure=${failure}, recipients=${tokens.length}`);
+  }
 }
 
 main().catch(async (err) => {

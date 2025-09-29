@@ -13,61 +13,62 @@ jobsRouter.use(authenticateJWT());
 // Helper to map an order/job doc to the DTO used by clients
 function mapToJobDTO(doc: any) {
   const soNumber = doc.soNumber || doc.raw?.SO_NO || `SO-${String(doc._id).slice(-6)}`;
+  const customerName: string | undefined = doc.customerName || doc.raw?.CUS_NM || undefined;
+  let firstName: string | undefined = customerName;
+  let lastName: string | undefined = undefined;
+  if (customerName && customerName.includes(' ')) {
+    const parts = String(customerName).split(/\s+/);
+    firstName = parts.shift();
+    lastName = parts.join(' ') || undefined;
+  }
   return {
     id: String(doc._id),
     soNumber,
-    customerCity: doc.customerCity || doc.raw?.CUS_CTY_NM || 'Unknown City',
+    customerName: firstName || customerName || null,
+    customerLastName: lastName || null,
+    customerCity: doc.customerCity || doc.raw?.CUS_CTY_NM || null,
     customerState: doc.customerState || doc.raw?.CUS_ST_CD || null,
-    customerZip: doc.customerZip || doc.raw?.ZIP_CD || doc.raw?.CN_ZIP_PC || '00000',
-    scheduledDate: doc.scheduledDate || (doc.raw?.SVC_SCH_DT ? new Date(doc.raw.SVC_SCH_DT) : null),
-    applianceType: doc.applianceType || doc.raw?.HS_SP_CD || doc.raw?.SPECIALTY || 'General Service',
-    manufacturerBrand: doc.manufacturerBrand || doc.raw?.MFG_BND_NM || null,
+    customerZip: doc.customerZip || doc.raw?.ZIP_CD || doc.raw?.CN_ZIP_PC || null,
+    applianceType: doc.applianceType || doc.raw?.HS_SP_CD || doc.raw?.SPECIALTY || null,
     serviceDescription: doc.serviceDescription || doc.raw?.SVC_RQ_DS || doc.raw?.REPAIR_TYPE || null,
+    scheduledDate: doc.scheduledDate || (doc.raw?.SVC_SCH_DT ? new Date(doc.raw.SVC_SCH_DT) : null),
+    scheduledTimeWindow: doc.scheduledTimeWindow || null,
+    priority: doc.priority || 'medium',
     status: 'available' as const,
   };
 }
 
 // GET /api/jobs/available
-// Pull available jobs for the authenticated vendor based on vendor name match
+// For now: return all jobs with pagination and optional filters. Later we can scope by vendor.
 jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
   try {
-    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
+    // Read query params
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || '20'), 10)));
+    const city = (req.query.city as string | undefined)?.trim();
+    const applianceType = (req.query.applianceType as string | undefined)?.trim();
 
-    const vendor = await VendorModel.findById(req.user.vendorId).lean();
-    if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
+    const filter: Record<string, any> = {};
+    if (city) filter.customerCity = new RegExp(`^${city}$`, 'i');
+    if (applianceType) filter.applianceType = new RegExp(`^${applianceType}$`, 'i');
 
-    // 1) Prefer jobs collection by vendorName
-    const jobs = await JobModel.find({ vendorName: vendor.name })
-      .sort({ scheduledDate: -1 })
-      .limit(1000)
+    const total = await JobModel.countDocuments(filter);
+    const docs = await JobModel.find(filter)
+      .sort({ scheduledDate: -1, createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
       .lean();
 
-    if (jobs.length > 0) {
-      const jobIds = jobs.map(j => j._id).filter(Boolean) as mongoose.Types.ObjectId[];
-      const assignedById = jobIds.length > 0
-        ? await JobAssignmentModel.find({ vendorId: req.user.vendorId, jobId: { $in: jobIds } }).select('jobId').lean()
-        : [];
-      const assignedSet = new Set((assignedById as any[]).map(a => String(a.jobId)));
-      const availableJobs = jobs.filter(j => !assignedSet.has(String(j._id))).map(mapToJobDTO);
-      return res.json({ success: true, data: availableJobs, count: availableJobs.length });
-    }
+    const jobs = docs.map(mapToJobDTO);
+    const totalPages = Math.ceil(total / pageSize) || 1;
 
-    // 2) Fallback to legacy orders collection
-    const orders = await OrderModel.find({ vendorName: vendor.name }).sort({ scheduledDate: -1 }).limit(1000).lean();
-
-    const soNumbers = orders.map(o => o.soNumber).filter(Boolean);
-    const assigned = soNumbers.length > 0
-      ? await JobAssignmentModel.aggregate([
-          { $match: { vendorId: new mongoose.Types.ObjectId(req.user.vendorId) } },
-          { $lookup: { from: 'jobs', localField: 'jobId', foreignField: '_id', as: 'job' } },
-          { $unwind: { path: '$job', preserveNullAndEmptyArrays: true } },
-          { $match: { 'job.soNumber': { $in: soNumbers } } },
-          { $project: { _id: 0, soNumber: '$job.soNumber' } }
-        ])
-      : [];
-    const assignedSet = new Set((assigned as any[]).map(a => a.soNumber));
-    const available = orders.filter(o => !o.soNumber || !assignedSet.has(o.soNumber)).map(mapToJobDTO);
-    return res.json({ success: true, data: available, count: available.length });
+    return res.json({
+      success: true,
+      data: {
+        jobs,
+        pagination: { page, pageSize, total, totalPages },
+      },
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch available jobs' });
   }

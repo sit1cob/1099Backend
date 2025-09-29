@@ -9,11 +9,14 @@ import { authRouter } from './routes/auth';
 import { vendorsRouter } from './routes/vendors';
 import { jobsRouter } from './routes/jobs';
 import { usersRouter } from './routes/users';
+import { startJobWatcher } from './services/jobWatcher';
 
 const PORT = Number(process.env.PORT || 5001);
 
 async function main() {
   await connectMongo();
+  // Start background watcher to notify on newly inserted jobs (requires Mongo replica set / Atlas)
+  startJobWatcher().catch((err) => console.error('[JobWatcher] failed to start', err));
 
   const app = express();
   app.use(helmet());

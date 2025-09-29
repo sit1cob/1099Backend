@@ -220,10 +220,17 @@
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/jobs/available",
+              "raw": "{{baseUrl}}/api/jobs/available?page={{page}}&pageSize={{pageSize}}&city={{city}}&applianceType={{applianceType}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "jobs", "available"]
-            }
+              "path": ["api", "jobs", "available"],
+              "query": [
+                { "key": "page", "value": "{{page}}", "description": "Page number (default 1)" },
+                { "key": "pageSize", "value": "{{pageSize}}", "description": "Items per page (default 20, max 100)" },
+                { "key": "city", "value": "{{city}}", "description": "Filter by city (case-insensitive exact)" },
+                { "key": "applianceType", "value": "{{applianceType}}", "description": "Filter by appliance type (case-insensitive exact)" }
+              ]
+            },
+            "description": "Returns paginated list of jobs with optional filters: city, applianceType. Response includes pagination metadata."
           }
         },
         {
