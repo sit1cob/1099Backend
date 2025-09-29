@@ -13,6 +13,10 @@ const UserSchema = new Schema({
   passwordChangedAt: { type: Date },
   loginAttempts: { type: Number, default: 0 },
   lockedUntil: { type: Date },
+  // FCM device tokens
+  fcmTokens: [{ type: String }],
+  lastFcmToken: { type: String },
+  lastFcmAt: { type: Date },
 }, { timestamps: true });
 
 export const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);

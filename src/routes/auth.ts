@@ -10,7 +10,7 @@ export const authRouter = Router();
 // POST /api/auth/login
 authRouter.post('/login', async (req, res) => {
   try {
-    const { username, password: pwd, role } = req.body || {};
+    const { username, password: pwd, role, fcmToken } = req.body || {};
     if (!username || !pwd) return res.status(400).json({ success: false, message: 'username and password required' });
 
     const user = await UserModel.findOne({ username }).lean();
@@ -30,6 +30,20 @@ authRouter.post('/login', async (req, res) => {
 
     const accessToken = jwtService.signAccess(payload, '2h');
     const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
+
+    // Persist session metadata and FCM token (if provided)
+    const $set: Record<string, any> = { lastLoginAt: new Date() };
+    const $addToSet: Record<string, any> = {};
+    if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
+      $set.lastFcmToken = fcmToken.trim();
+      $set.lastFcmAt = new Date();
+      $addToSet.fcmTokens = fcmToken.trim();
+    }
+    if (Object.keys($addToSet).length > 0) {
+      await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+    } else {
+      await UserModel.updateOne({ _id: user._id }, { $set });
+    }
 
     let vendorName: string | undefined;
     if (payload.vendorId) {

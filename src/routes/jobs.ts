@@ -36,9 +36,25 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
     const vendor = await VendorModel.findById(req.user.vendorId).lean();
     if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
 
+    // 1) Prefer jobs collection by vendorName
+    const jobs = await JobModel.find({ vendorName: vendor.name })
+      .sort({ scheduledDate: -1 })
+      .limit(1000)
+      .lean();
+
+    if (jobs.length > 0) {
+      const jobIds = jobs.map(j => j._id).filter(Boolean) as mongoose.Types.ObjectId[];
+      const assignedById = jobIds.length > 0
+        ? await JobAssignmentModel.find({ vendorId: req.user.vendorId, jobId: { $in: jobIds } }).select('jobId').lean()
+        : [];
+      const assignedSet = new Set((assignedById as any[]).map(a => String(a.jobId)));
+      const availableJobs = jobs.filter(j => !assignedSet.has(String(j._id))).map(mapToJobDTO);
+      return res.json({ success: true, data: availableJobs, count: availableJobs.length });
+    }
+
+    // 2) Fallback to legacy orders collection
     const orders = await OrderModel.find({ vendorName: vendor.name }).sort({ scheduledDate: -1 }).limit(1000).lean();
 
-    // Filter out already assigned SO numbers (if present)
     const soNumbers = orders.map(o => o.soNumber).filter(Boolean);
     const assigned = soNumbers.length > 0
       ? await JobAssignmentModel.aggregate([
@@ -50,9 +66,7 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
         ])
       : [];
     const assignedSet = new Set((assigned as any[]).map(a => a.soNumber));
-
     const available = orders.filter(o => !o.soNumber || !assignedSet.has(o.soNumber)).map(mapToJobDTO);
-
     return res.json({ success: true, data: available, count: available.length });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch available jobs' });

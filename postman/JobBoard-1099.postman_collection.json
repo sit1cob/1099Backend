@@ -83,7 +83,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"role\": \"registered_user\"\n}"
+              "raw": "{\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"role\": \"registered_user\",\n  \"fcmToken\": \"{{fcmToken}}\"\n}"
             }
           },
           "event": [
@@ -262,6 +262,7 @@
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:5001" },
     { "key": "accessToken", "value": "" },
-    { "key": "jobId", "value": "" }
+    { "key": "jobId", "value": "" },
+    { "key": "fcmToken", "value": "" }
   ]
 }
