@@ -1,0 +1,36 @@
+{
+  "name": "job-board-mongo-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_ENV=development tsx --env-file=.env src/server.ts",
+    "start": "NODE_ENV=production node dist/server.js",
+    "build": "esbuild src/server.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "lint": "eslint . --ext .ts",
+    "seed": "tsx --env-file=.env scripts/seed.ts"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "morgan": "^1.10.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^20.16.11",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.13.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.6.3"
+  }
+}
