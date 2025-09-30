@@ -214,23 +214,37 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
     // Prevent duplicate claim by same vendor; if exists, treat as idempotent and ensure job/order reflects assignment
     const existing = await JobAssignmentModel.findOne({ jobId: jobObjectId, vendorId: req.user.vendorId }).lean();
     if (existing) {
+      // Reflect user's current action on the Job/Order
       if (job) {
-        await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+        if (normalizedAction === 'accept') {
+          await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+        } else {
+          // decline -> make it available again and clear vendor
+          await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } });
+        }
       } else if (order) {
         try {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+          if (normalizedAction === 'accept') {
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+          } else {
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } } as any);
+          }
         } catch {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+          if (normalizedAction === 'accept') {
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+          } else {
+            await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '' } } as any);
+          }
         }
       }
       return res.status(200).json({
         success: true,
-        message: 'Job already claimed by this vendor',
+        message: normalizedAction === 'accept' ? 'Job already claimed by this vendor' : 'Job was previously claimed; updated to declined',
         data: {
           assignmentId: String(existing._id),
           jobId: String(existing.jobId),
           vendorId: String(existing.vendorId),
-          status: 'assigned',
+          status: normalizedAction === 'accept' ? 'assigned' : 'declined',
           claimedAt: new Date(existing.assignedAt || existing.createdAt || Date.now()).toISOString(),
         },
       });
@@ -245,16 +259,28 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
     };
     const assignment = await JobAssignmentModel.create(payload);
 
-    // Reflect claim on the Job document if it exists there
+    // Reflect claim/decline on the Job/Order document
     if (job) {
-      await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+      if (normalizedAction === 'accept') {
+        await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+      } else {
+        await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } });
+      }
     } else if (order) {
-      // Legacy path: reflect assignment on orders collection
+      // Legacy path: reflect on orders collection
       try {
-        await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+        if (normalizedAction === 'accept') {
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+        } else {
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } } as any);
+        }
       } catch {
-        // Some legacy orders may not have a status field; at least persist vendorId
-        await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+        // Some legacy orders may not have a status field
+        if (normalizedAction === 'accept') {
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+        } else {
+          await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '' } } as any);
+        }
       }
     }
 
