@@ -13,7 +13,36 @@ vendorsRouter.use(authenticateJWT());
 // GET /api/vendors/me
 vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
   try {
-    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
+    if (!req.user?.vendorId) {
+      return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
+    }
+
+    const vendor = await VendorModel.findById(req.user.vendorId).lean();
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: 'Vendor not found' });
+    }
+
+    // Compute stats from assignments (basic version)
+    const totalJobs = await JobAssignmentModel.countDocuments({ vendorId: req.user.vendorId });
+    const completedJobs = await JobAssignmentModel.countDocuments({ vendorId: req.user.vendorId, status: 'completed' });
+    const averageRating = null; // placeholder, not tracked currently
+
+    return res.json({
+      success: true,
+      data: {
+        id: String(vendor._id),
+        name: vendor.name,
+        phoneNumber: (vendor as any).phone || null,
+        email: (vendor as any).email || null,
+        isActive: vendor.isActive !== false,
+        createdAt: (vendor as any).createdAt || null,
+        stats: { totalJobs, completedJobs, averageRating },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor' });
+  }
+});
 
 // PATCH /api/vendors/me
 // Update vendor profile fields: phone, serviceAreas, appliances, available
@@ -57,33 +86,6 @@ vendorsRouter.patch('/me', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to update vendor profile' });
-  }
-});
-    const vendor = await VendorModel.findById(req.user.vendorId).lean();
-    if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
-    // Compute stats from assignments (basic version)
-    const totalJobs = await JobAssignmentModel.countDocuments({ vendorId: req.user.vendorId });
-    const completedJobs = await JobAssignmentModel.countDocuments({ vendorId: req.user.vendorId, status: 'completed' });
-    const averageRating = null; // placeholder, not tracked currently
-
-    return res.json({
-      success: true,
-      data: {
-        id: String(vendor._id),
-        name: vendor.name,
-        phoneNumber: (vendor as any).phone || null,
-        email: (vendor as any).email || null,
-        isActive: vendor.isActive !== false,
-        createdAt: (vendor as any).createdAt || null,
-        stats: {
-          totalJobs,
-          completedJobs,
-          averageRating,
-        },
-      },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor' });
   }
 });
 
@@ -172,5 +174,70 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
     return res.json({ success: true, data: assignments, count: assignments.length });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignments' });
+  }
+});
+
+// GET /api/vendors/me/dashboard
+// Returns KPI-style metrics for the vendor dashboard
+vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
+
+    const vendor = await VendorModel.findById(req.user.vendorId).lean();
+    if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
+
+    const vendorId = req.user.vendorId;
+
+    const [
+      activeOrders,
+      acceptedOrders,
+      receivedOrders,
+      problemOrders,
+      availableOrders,
+    ] = await Promise.all([
+      // Active: assigned or in_progress
+      JobAssignmentModel.countDocuments({ vendorId, status: { $in: ['assigned', 'in_progress'] } }),
+      // Accepted: explicitly assigned (claimed)
+      JobAssignmentModel.countDocuments({ vendorId, status: 'assigned' }),
+      // Received: all jobs ever assigned to this vendor (any status)
+      JobAssignmentModel.countDocuments({ vendorId }),
+      // Problem: flagged/problem state
+      JobAssignmentModel.countDocuments({ vendorId, status: 'problem' }),
+      // Available: open jobs not yet assigned (global)
+      JobModel.countDocuments({ status: /^available$/i }),
+    ]);
+
+    const totalServiceOrders = Math.max(receivedOrders, activeOrders + (receivedOrders - activeOrders));
+    const safeDiv = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
+    const pieBreakdown = [
+      { key: 'active', count: activeOrders, percent: safeDiv(activeOrders, receivedOrders || totalServiceOrders) },
+      { key: 'accepted', count: acceptedOrders, percent: safeDiv(acceptedOrders, receivedOrders || totalServiceOrders) },
+      { key: 'received', count: receivedOrders, percent: safeDiv(receivedOrders, receivedOrders || totalServiceOrders) },
+      { key: 'problem', count: problemOrders, percent: safeDiv(problemOrders, receivedOrders || totalServiceOrders) },
+    ];
+
+    return res.json({
+      success: true,
+      data: {
+        date: new Date().toISOString(),
+        greetingName: vendor.name || null,
+        totals: {
+          serviceOrders: receivedOrders,
+          availableOrders,
+        },
+        kpis: {
+          activeOrders,
+          acceptedOrders,
+          receivedOrders,
+          problemOrders,
+        },
+        chart: {
+          total: receivedOrders,
+          segments: pieBreakdown,
+        },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to load dashboard' });
   }
 });

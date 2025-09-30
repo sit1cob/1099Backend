@@ -259,6 +259,21 @@
               "path": ["api", "vendors", "me", "assignments"]
             }
           }
+        },
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "dashboard"]
+            }
+          },
+          "description": "Returns KPI-style metrics for the vendor dashboard including totals, kpis and chart segments."
         }
       ]
     },
