@@ -111,7 +111,7 @@ function mapToJobDTO(doc: any) {
     scheduledDate: doc.scheduledDate || (doc.raw?.SVC_SCH_DT ? new Date(doc.raw.SVC_SCH_DT) : null),
     scheduledTimeWindow: doc.scheduledTimeWindow || null,
     priority: doc.priority || 'medium',
-    status: 'available' as const,
+    status: doc.status || 'available',
   };
 }
 
@@ -126,8 +126,8 @@ vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || '20'), 10)));
 
-    // Prefer jobs collection filtered by vendorName
-    const filter = { vendorName: vendor.name } as any;
+    // Prefer jobs collection filtered by vendorId and assigned status
+    const filter: any = { vendorId: req.user.vendorId, status: /^assigned$/i };
     let total = await JobModel.countDocuments(filter);
     let docs = await JobModel.find(filter)
       .sort({ scheduledDate: -1, createdAt: -1 })
@@ -137,8 +137,10 @@ vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
 
     // Fallback to legacy orders if no jobs
     if (total === 0) {
-      total = await OrderModel.countDocuments({ vendorName: vendor.name });
-      docs = await OrderModel.find({ vendorName: vendor.name })
+      // Legacy: try vendorId first if present on orders, else fallback to vendorName
+      const orderFilter: any = { $or: [ { vendorId: req.user.vendorId }, { vendorName: vendor.name } ] };
+      total = await OrderModel.countDocuments(orderFilter);
+      docs = await OrderModel.find(orderFilter)
         .sort({ scheduledDate: -1, createdAt: -1 })
         .skip((page - 1) * pageSize)
         .limit(pageSize)

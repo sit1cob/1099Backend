@@ -52,6 +52,8 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
     const applianceType = (req.query.applianceType as string | undefined)?.trim();
 
     const filter: Record<string, any> = {};
+    // Only list truly available jobs
+    filter.status = /^available$/i;
     if (city) filter.customerCity = new RegExp(`^${city}$`, 'i');
     if (applianceType) filter.applianceType = new RegExp(`^${applianceType}$`, 'i');
 
