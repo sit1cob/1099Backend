@@ -29,3 +29,6 @@ coverage/
 # Misc
 *.local
 *.tmp
+
+# Firebase service account (do not commit)
+src/services/firebase-service-account.json
