@@ -14,6 +14,51 @@ vendorsRouter.use(authenticateJWT());
 vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
   try {
     if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
+
+// PATCH /api/vendors/me
+// Update vendor profile fields: phone, serviceAreas, appliances, available
+vendorsRouter.patch('/me', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
+
+    const { phone, serviceAreas, appliances, available } = req.body || {};
+    const updates: any = {};
+    if (typeof phone === 'string') updates.phone = phone;
+    if (Array.isArray(serviceAreas)) updates.serviceAreas = serviceAreas;
+    if (Array.isArray(appliances)) updates.appliances = appliances;
+    if (typeof available === 'boolean') updates.available = available;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields to update' });
+    }
+
+    await VendorModel.updateOne({ _id: req.user.vendorId }, { $set: updates });
+    const vendor = await VendorModel.findById(req.user.vendorId).lean();
+    if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
+
+    // Stats (same as GET /me)
+    const totalJobs = await JobAssignmentModel.countDocuments({ vendorId: req.user.vendorId });
+    const completedJobs = await JobAssignmentModel.countDocuments({ vendorId: req.user.vendorId, status: 'completed' });
+    const averageRating = null;
+
+    return res.json({
+      success: true,
+      data: {
+        id: String(vendor._id),
+        name: vendor.name,
+        phoneNumber: (vendor as any).phone || null,
+        serviceAreas: (vendor as any).serviceAreas || [],
+        appliances: (vendor as any).appliances || [],
+        available: (vendor as any).available !== false,
+        isActive: vendor.isActive !== false,
+        createdAt: (vendor as any).createdAt || null,
+        stats: { totalJobs, completedJobs, averageRating },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update vendor profile' });
+  }
+});
     const vendor = await VendorModel.findById(req.user.vendorId).lean();
     if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
     // Compute stats from assignments (basic version)

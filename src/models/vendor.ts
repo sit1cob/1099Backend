@@ -5,6 +5,10 @@ const VendorSchema = new Schema({
   phone: { type: String },
   zipCodes: [{ type: String }],
   skillSets: [{ type: String }],
+  // New canonical fields
+  serviceAreas: [{ type: String }],
+  appliances: [{ type: String }],
+  available: { type: Boolean, default: true },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

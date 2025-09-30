@@ -25,4 +25,36 @@ const JobSchema = new Schema({
   vendorId: { type: Types.ObjectId, ref: 'Vendor' },
 }, { timestamps: true });
 
+// Logging: mark if doc is new in pre-save, then log in post-save
+JobSchema.pre('save', function (next) {
+  // @ts-expect-error attach temp flag
+  this._wasNew = this.isNew;
+  next();
+});
+
+JobSchema.post('save', function (doc) {
+  // @ts-expect-error temp flag from pre-save
+  if (this._wasNew) {
+    const info = {
+      id: String(doc._id),
+      soNumber: (doc as any).soNumber,
+      city: (doc as any).customerCity,
+      state: (doc as any).customerState,
+    };
+    console.log('[Job] Created', info);
+  }
+});
+
+// Note: save() middleware does NOT run for insertMany(). Add a dedicated hook.
+JobSchema.post('insertMany', function (docs: any[]) {
+  try {
+    const count = Array.isArray(docs) ? docs.length : 0;
+    if (!count) return;
+    const preview = (docs.slice(0, 3) as any[]).map((d) => ({ id: String(d._id), soNumber: d.soNumber, city: d.customerCity }));
+    console.log(`[Job] insertMany created count=${count}`, preview);
+  } catch (e) {
+    // best-effort logging
+  }
+});
+
 export const JobModel = mongoose.models.Job || mongoose.model('Job', JobSchema);

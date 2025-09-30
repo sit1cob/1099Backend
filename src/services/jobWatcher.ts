@@ -40,14 +40,27 @@ export async function startJobWatcher() {
 
       const title = 'New job created';
       const body = vendorName ? `${vendorName}: ${soNumber || 'SO'} in ${city || 'your area'}` : `Job ${soNumber || ''} added`;
+      const data = { type: 'new_job', soNumber: String(soNumber || ''), city: String(city || '') } as any;
 
-      let success = 0, failure = 0;
+      const previewTokens = tokens.slice(0, 5);
+      console.log('[JobWatcher] Preparing notification', {
+        tokensTotal: tokens.length,
+        tokensPreview: previewTokens,
+        message: { title, body, data },
+      });
+      // Print all FCM tokens as requested
+      console.log('[JobWatcher] All FCM tokens:', tokens);
+
+      let success = 0, failure = 0, batches = 0;
       for (const batch of chunk(tokens, 500)) {
-        const res = await sendMulticast(batch, { title, body, data: { type: 'new_job', soNumber: String(soNumber || '') } });
+        batches += 1;
+        console.log(`[JobWatcher] Sending batch ${batches} size=${batch.length}`);
+        const res = await sendMulticast(batch, { title, body, data });
+        console.log(`[JobWatcher] Batch ${batches} result`, { successCount: res.successCount, failureCount: res.failureCount });
         success += res.successCount || 0;
         failure += res.failureCount || 0;
       }
-      console.log(`[JobWatcher] Notified tokens=${tokens.length}, success=${success}, failure=${failure}`);
+      console.log(`[JobWatcher] Notification summary tokens=${tokens.length}, batches=${batches}, success=${success}, failure=${failure}`);
     } catch (err) {
       console.error('[JobWatcher] Notification error:', err);
     }

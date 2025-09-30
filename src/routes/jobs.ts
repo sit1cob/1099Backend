@@ -4,6 +4,8 @@ import { VendorModel } from '../models/vendor';
 import { OrderModel } from '../models/order';
 import { JobModel } from '../models/job';
 import { JobAssignmentModel } from '../models/jobAssignment';
+import { UserModel } from '../models/user';
+import { sendMulticast, chunk } from '../services/fcm';
 import mongoose from 'mongoose';
 
 export const jobsRouter = Router();
@@ -34,7 +36,8 @@ function mapToJobDTO(doc: any) {
     scheduledDate: doc.scheduledDate || (doc.raw?.SVC_SCH_DT ? new Date(doc.raw.SVC_SCH_DT) : null),
     scheduledTimeWindow: doc.scheduledTimeWindow || null,
     priority: doc.priority || 'medium',
-    status: 'available' as const,
+    status: doc.status || 'available',
+    vendorId: doc.vendorId ? String(doc.vendorId) : null,
   };
 }
 
@@ -74,6 +77,91 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// POST /api/jobs
+// Create a new job (use this to trigger creation logs locally). Auth required.
+jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
+  try {
+    // Basic auth guard
+    if (!req.user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const body = req.body || {};
+    if (!body.soNumber) {
+      return res.status(400).json({ success: false, message: 'soNumber is required' });
+    }
+
+    const doc = await JobModel.create({
+      soNumber: String(body.soNumber),
+      serviceUnitNumber: body.serviceUnitNumber,
+      serviceLocation: body.serviceLocation,
+      customerName: body.customerName,
+      customerAddress: body.customerAddress,
+      customerCity: body.customerCity,
+      customerState: body.customerState,
+      customerZip: body.customerZip,
+      customerPhone: body.customerPhone,
+      customerAltPhone: body.customerAltPhone,
+      scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : undefined,
+      applianceType: body.applianceType,
+      applianceCode: body.applianceCode,
+      manufacturerBrand: body.manufacturerBrand,
+      serviceDescription: body.serviceDescription,
+      customerType: body.customerType,
+      status: body.status || 'available',
+      requiredSkills: Array.isArray(body.requiredSkills) ? body.requiredSkills : undefined,
+      serviceProvider: body.serviceProvider,
+      productCategory: body.productCategory,
+      priority: body.priority || 'medium',
+      vendorId: body.vendorId && mongoose.isValidObjectId(body.vendorId) ? new mongoose.Types.ObjectId(body.vendorId) : undefined,
+    });
+
+    // Fire-and-forget: send FCM notifications to all users with tokens
+    (async () => {
+      try {
+        const users = await UserModel.find({ fcmTokens: { $exists: true, $ne: [] } }).select('fcmTokens').lean();
+        const tokenSet = new Set<string>();
+        for (const u of users as any[]) {
+          for (const t of (u.fcmTokens || []) as string[]) {
+            if (t) tokenSet.add(t);
+          }
+        }
+        const tokens = Array.from(tokenSet);
+
+        const title = 'New job created';
+        const bodyText = `${doc.soNumber || 'SO'} in ${doc.customerCity || 'your area'}`;
+        const data = { type: 'new_job', soNumber: String(doc.soNumber || ''), city: String(doc.customerCity || '') } as any;
+
+        const previewTokens = tokens.slice(0, 5);
+        console.log('[JobCreate] Preparing notification', {
+          tokensTotal: tokens.length,
+          tokensPreview: previewTokens,
+          message: { title, body: bodyText, data },
+        });
+        // Print all FCM tokens as requested
+        console.log('[JobCreate] All FCM tokens:', tokens);
+
+        let success = 0, failure = 0, batches = 0;
+        for (const batch of chunk(tokens, 500)) {
+          batches += 1;
+          console.log(`[JobCreate] Sending batch ${batches} size=${batch.length}`);
+          const res = await sendMulticast(batch, { title, body: bodyText, data });
+          console.log(`[JobCreate] Batch ${batches} result`, { successCount: res.successCount, failureCount: res.failureCount });
+          success += res.successCount || 0;
+          failure += res.failureCount || 0;
+        }
+        console.log(`[JobCreate] Notification summary tokens=${tokens.length}, batches=${batches}, success=${success}, failure=${failure}`);
+      } catch (e) {
+        console.error('[JobCreate] Notification error:', e);
+      }
+    })();
+
+    return res.status(201).json({ success: true, data: mapToJobDTO(doc), message: 'Job created' });
+  } catch (err: any) {
+    if (String(err?.message || '').includes('duplicate key')) {
+      return res.status(409).json({ success: false, message: 'soNumber already exists' });
+    }
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to create job' });
+  }
+});
 // GET /api/jobs/:id
 jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
   try {
@@ -114,9 +202,30 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ success: false, message: "action must be 'accept' or 'decline'" });
     }
 
-    // Prevent duplicate claim by same vendor
+    // Prevent duplicate claim by same vendor; if exists, treat as idempotent and ensure job/order reflects assignment
     const existing = await JobAssignmentModel.findOne({ jobId: jobObjectId, vendorId: req.user.vendorId }).lean();
-    if (existing) return res.status(409).json({ success: false, message: 'Job already claimed by this vendor' });
+    if (existing) {
+      if (job) {
+        await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+      } else if (order) {
+        try {
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+        } catch {
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+        }
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'Job already claimed by this vendor',
+        data: {
+          assignmentId: String(existing._id),
+          jobId: String(existing.jobId),
+          vendorId: String(existing.vendorId),
+          status: 'assigned',
+          claimedAt: new Date(existing.assignedAt || existing.createdAt || Date.now()).toISOString(),
+        },
+      });
+    }
 
     const payload: any = {
       jobId: jobObjectId,
@@ -126,6 +235,19 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
       action: normalizedAction,
     };
     const assignment = await JobAssignmentModel.create(payload);
+
+    // Reflect claim on the Job document if it exists there
+    if (job) {
+      await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+    } else if (order) {
+      // Legacy path: reflect assignment on orders collection
+      try {
+        await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+      } catch {
+        // Some legacy orders may not have a status field; at least persist vendorId
+        await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+      }
+    }
 
     return res.status(201).json({
       success: true,

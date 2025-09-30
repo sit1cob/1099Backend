@@ -11,34 +11,12 @@ export const authRouter = Router();
 authRouter.post('/login', async (req, res) => {
   try {
     const { username, password: pwd, role, fcmToken } = req.body || {};
+    if (typeof fcmToken === 'string') {
+      console.log('[LOGIN] received fcmToken len=', fcmToken.trim().length);
+    } else {
+      console.log('[LOGIN] no fcmToken in request');
+    }
     if (!username || !pwd) return res.status(400).json({ success: false, message: 'username and password required' });
-
-// POST /api/auth/logout
-// Body: { fcmToken?: string }
-authRouter.post('/logout', authenticateJWT(), async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = req.user!.userId;
-    const { fcmToken } = (req.body || {}) as { fcmToken?: string };
-
-    const updates: any = {};
-    if (typeof fcmToken === 'string' && fcmToken.trim()) {
-      updates.$pull = { fcmTokens: fcmToken.trim() };
-      // Only unset last token fields if the provided token matches the last
-      const user = await UserModel.findById(userId).select('lastFcmToken').lean();
-      if (user?.lastFcmToken === fcmToken.trim()) {
-        updates.$unset = { lastFcmToken: '', lastFcmAt: '' };
-      }
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await UserModel.updateOne({ _id: userId }, updates);
-    }
-
-    return res.json({ success: true, message: 'Logged out' });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Logout failed' });
-  }
-});
 
     const user = await UserModel.findOne({ username }).lean();
     if (!user || !user.passwordHash) return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -67,16 +45,28 @@ authRouter.post('/logout', authenticateJWT(), async (req: AuthenticatedRequest, 
       $addToSet.fcmTokens = fcmToken.trim();
     }
     if (Object.keys($addToSet).length > 0) {
-      await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+      const result = await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+      console.log('[LOGIN] fcmToken update result', { matched: (result as any).matchedCount, modified: (result as any).modifiedCount });
     } else {
-      await UserModel.updateOne({ _id: user._id }, { $set });
+      const result = await UserModel.updateOne({ _id: user._id }, { $set });
+      console.log('[LOGIN] profile update result', { matched: (result as any).matchedCount, modified: (result as any).modifiedCount });
     }
+    // Fetch back minimal fields to verify
+    const updated = await UserModel.findById(user._id).select('fcmTokens lastFcmToken lastFcmAt').lean();
+    console.log('[LOGIN] user fcm snapshot', {
+      tokensCount: (updated?.fcmTokens || []).length,
+      lastFcmToken: updated?.lastFcmToken ? String(updated.lastFcmToken).slice(0, 8) + '…' : null,
+      lastFcmAt: updated?.lastFcmAt || null,
+    });
 
+    // Fetch latest user doc after updates to return fresh data
+    const freshUser = await UserModel.findById(user._id).lean();
     let vendorName: string | undefined;
     if (payload.vendorId) {
       const vendor = await VendorModel.findById(payload.vendorId).lean();
       vendorName = vendor?.name;
     }
+    console.log('[LOGIN] fresh user', freshUser);
 
     const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
 
@@ -86,11 +76,15 @@ authRouter.post('/logout', authenticateJWT(), async (req: AuthenticatedRequest, 
         accessToken,
         refreshToken,
         user: {
-          id: payload.userId,
-          username: user.username,
-          role: payload.role,
-          vendorId: payload.vendorId,
+          id: String(freshUser?._id || user._id),
+          username: freshUser?.username || user.username,
+          role: freshUser?.role || payload.role,
+          vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
           vendorName,
+          email: freshUser?.email,
+          lastFcmToken: freshUser?.lastFcmToken || updated?.lastFcmToken,
+          lastFcmAt: freshUser?.lastFcmAt || updated?.lastFcmAt,
+          fcmTokensCount: Array.isArray(freshUser?.fcmTokens) ? freshUser!.fcmTokens.length : (Array.isArray(updated?.fcmTokens) ? updated!.fcmTokens.length : 0),
           permissions,
         },
       },
@@ -98,6 +92,33 @@ authRouter.post('/logout', authenticateJWT(), async (req: AuthenticatedRequest, 
   } catch (err: any) {
     console.error('[LOGIN]', err);
     return res.status(500).json({ success: false, message: err?.message || 'Login failed' });
+  }
+});
+
+// POST /api/auth/logout
+// Body: { fcmToken?: string }
+authRouter.post('/logout', authenticateJWT(), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { fcmToken } = (req.body || {}) as { fcmToken?: string };
+
+    const updates: any = {};
+    if (typeof fcmToken === 'string' && fcmToken.trim()) {
+      updates.$pull = { fcmTokens: fcmToken.trim() };
+      // Only unset last token fields if the provided token matches the last
+      const user = await UserModel.findById(userId).select('lastFcmToken').lean();
+      if (user?.lastFcmToken === fcmToken.trim()) {
+        updates.$unset = { lastFcmToken: '', lastFcmAt: '' };
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await UserModel.updateOne({ _id: userId }, updates);
+    }
+
+    return res.json({ success: true, message: 'Logged out' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Logout failed' });
   }
 });
 
@@ -115,6 +136,9 @@ authRouter.get('/status', authenticateJWT(), async (req: AuthenticatedRequest, r
         id: String(user._id),
         role: user.role || 'registered_user',
         vendorId: user.vendorId ? String(user.vendorId) : undefined,
+        lastFcmToken: user.lastFcmToken || undefined,
+        lastFcmAt: user.lastFcmAt || undefined,
+        fcmTokensCount: Array.isArray(user.fcmTokens) ? user.fcmTokens.length : 0,
         permissions,
       },
     });
@@ -125,10 +149,10 @@ authRouter.get('/status', authenticateJWT(), async (req: AuthenticatedRequest, r
 
 // POST /api/auth/register-vendor
 // Public vendor registration: creates a Vendor and a User linked to it
-// Body: { vendorName, username, password, email? }
+// Body: { vendorName, username, password, email?, phone?, serviceAreas?: string[], appliances?: string[], available?: boolean }
 authRouter.post('/register-vendor', async (req, res) => {
   try {
-    const { vendorName, username, password: pwd, email } = req.body || {};
+    const { vendorName, username, password: pwd, email, phone, serviceAreas, appliances, available } = req.body || {};
     if (!vendorName || !username || !pwd) {
       return res.status(400).json({ success: false, message: 'vendorName, username and password are required' });
     }
@@ -142,7 +166,23 @@ authRouter.post('/register-vendor', async (req, res) => {
     // Find or create vendor by name
     let vendor = await VendorModel.findOne({ name: vendorName });
     if (!vendor) {
-      vendor = await VendorModel.create({ name: vendorName, isActive: true });
+      vendor = await VendorModel.create({
+        name: vendorName,
+        phone,
+        serviceAreas: Array.isArray(serviceAreas) ? serviceAreas : undefined,
+        appliances: Array.isArray(appliances) ? appliances : undefined,
+        available: typeof available === 'boolean' ? available : undefined,
+        isActive: true,
+      } as any);
+    } else {
+      const updates: any = {};
+      if (typeof phone === 'string') updates.phone = phone;
+      if (Array.isArray(serviceAreas)) updates.serviceAreas = serviceAreas;
+      if (Array.isArray(appliances)) updates.appliances = appliances;
+      if (typeof available === 'boolean') updates.available = available;
+      if (Object.keys(updates).length > 0) await VendorModel.updateOne({ _id: vendor._id }, { $set: updates });
+      // refresh vendor with new values
+      vendor = await VendorModel.findById(vendor._id);
     }
 
     // Hash password and create user
@@ -171,7 +211,14 @@ authRouter.post('/register-vendor', async (req, res) => {
       success: true,
       message: 'Vendor and user registered',
       data: {
-        vendor: { id: String(vendor._id), name: vendor.name },
+        vendor: {
+          id: String(vendor._id),
+          name: vendor.name,
+          phone: (vendor as any).phone || null,
+          serviceAreas: (vendor as any).serviceAreas || [],
+          appliances: (vendor as any).appliances || [],
+          available: (vendor as any).available !== false,
+        },
         user: { id: String(user._id), username: user.username, role: 'registered_user', vendorId: String(vendor._id) },
         accessToken,
         refreshToken,

@@ -51,7 +51,35 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"vendorName\": \"AIJ_Appliances\",\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"email\": \"aij@example.com\"\n}"
+              "raw": "{\n  \"vendorName\": \"AIJ_Appliances\",\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"email\": \"aij@example.com\",\n  \"phone\": \"+14083481485\",\n  \"serviceAreas\": [\"60607\", \"60611\", \"60601\"],\n  \"appliances\": [\"Refrigerator\", \"Air Conditioner\"],\n  \"available\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorName\": \"AIJ_Appliances\",\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"email\": \"aij@example.com\",\n  \"phone\": \"+14083481485\",\n  \"serviceAreas\": [\"60607\", \"60611\", \"60601\"],\n  \"appliances\": [\"Refrigerator\", \"Air Conditioner\"],\n  \"available\": true\n}"
             }
           },
           "event": [
@@ -180,6 +208,26 @@
           ]
         },
         {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+12245660644\",\n  \"serviceAreas\": [\"60611\", \"60601\", \"60614\"],\n  \"appliances\": [\"Microwave Oven\", \"Refrigerator\"],\n  \"available\": true\n}"
+            },
+            "description": "Update vendor profile fields: phone, serviceAreas, appliances, available."
+          }
+        },
+        {
           "name": "Get My Available Jobs",
           "request": {
             "method": "GET",
@@ -187,10 +235,15 @@
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/vendors/me/jobs",
+              "raw": "{{baseUrl}}/api/vendors/me/jobs?page={{page}}&pageSize={{pageSize}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "vendors", "me", "jobs"]
-            }
+              "path": ["api", "vendors", "me", "jobs"],
+              "query": [
+                { "key": "page", "value": "{{page}}", "description": "Page number (default 1)" },
+                { "key": "pageSize", "value": "{{pageSize}}", "description": "Items per page (default 20, max 100)" }
+              ]
+            },
+            "description": "Returns paginated jobs available for the authenticated vendor. Same job DTO and pagination metadata as /api/jobs/available."
           }
         },
         {
@@ -231,6 +284,26 @@
               ]
             },
             "description": "Returns paginated list of jobs with optional filters: city, applianceType. Response includes pagination metadata."
+          }
+        },
+        {
+          "name": "Create Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"soNumber\": \"TEST-123\",\n  \"customerName\": \"John Smith\",\n  \"customerCity\": \"Chicago\",\n  \"customerState\": \"IL\",\n  \"customerZip\": \"60607\",\n  \"scheduledDate\": \"2025-10-01T10:00:00Z\",\n  \"applianceType\": \"Refrigerator\",\n  \"manufacturerBrand\": \"Whirlpool\",\n  \"serviceDescription\": \"Not cooling\",\n  \"priority\": \"medium\"\n}"
+            },
+            "description": "Create a new job. Requires Authorization. The only required field is soNumber; other fields are optional."
           }
         },
         {
