@@ -57,6 +57,17 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
     if (city) filter.customerCity = new RegExp(`^${city}$`, 'i');
     if (applianceType) filter.applianceType = new RegExp(`^${applianceType}$`, 'i');
 
+    // Exclude jobs this vendor has previously declined
+    if (req.user?.vendorId) {
+      const declined = await JobAssignmentModel.find({ vendorId: req.user.vendorId, status: 'declined' })
+        .select('jobId')
+        .lean();
+      const declinedJobIds = declined.map((d: any) => d.jobId).filter(Boolean);
+      if (declinedJobIds.length > 0) {
+        filter._id = { $nin: declinedJobIds };
+      }
+    }
+
     const total = await JobModel.countDocuments(filter);
     const docs = await JobModel.find(filter)
       .sort({ scheduledDate: -1, createdAt: -1 })
