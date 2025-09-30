@@ -32,18 +32,22 @@ export async function startJobWatcher() {
       const users = await UserModel.find({ fcmTokens: { $exists: true, $ne: [] } }).select('fcmTokens').lean();
       const tokenSet = new Set<string>();
       for (const u of users as any[]) {
-        for (const t of (u.fcmTokens || []) as string[]) {
-          if (t) tokenSet.add(t);
-        }
+        const t = (u as any).lastFcmToken as string | undefined;
+        if (t && t.trim()) tokenSet.add(t.trim());
       }
       const tokens = Array.from(tokenSet);
 
       const title = 'New job created';
       const body = vendorName ? `${vendorName}: ${soNumber || 'SO'} in ${city || 'your area'}` : `Job ${soNumber || ''} added`;
-      const data = { type: 'new_job', soNumber: String(soNumber || ''), city: String(city || '') } as any;
+      const data = {
+        type: 'new_job',
+        jobId: String(doc._id),
+        soNumber: String(soNumber || ''),
+        city: String(city || ''),
+      } as any;
 
       const previewTokens = tokens.slice(0, 5);
-      console.log('[JobWatcher] Preparing notification', {
+      console.log('[JobWatcher] Preparing notification (lastFcmToken only)', {
         tokensTotal: tokens.length,
         tokensPreview: previewTokens,
         message: { title, body, data },

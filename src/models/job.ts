@@ -12,6 +12,7 @@ const JobSchema = new Schema({
   customerPhone: { type: String },
   customerAltPhone: { type: String },
   scheduledDate: { type: Date },
+  scheduledTimeWindow: { type: String },
   applianceType: { type: String },
   applianceCode: { type: String },
   manufacturerBrand: { type: String },

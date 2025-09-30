@@ -101,10 +101,11 @@ jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
       customerPhone: body.customerPhone,
       customerAltPhone: body.customerAltPhone,
       scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : undefined,
+      scheduledTimeWindow: typeof body.scheduledTimeWindow === 'string' ? body.scheduledTimeWindow : undefined,
       applianceType: body.applianceType,
       applianceCode: body.applianceCode,
       manufacturerBrand: body.manufacturerBrand,
-      serviceDescription: body.serviceDescription,
+      serviceDescription: typeof body.serviceDescription === 'string' ? body.serviceDescription : undefined,
       customerType: body.customerType,
       status: body.status || 'available',
       requiredSkills: Array.isArray(body.requiredSkills) ? body.requiredSkills : undefined,
@@ -117,25 +118,31 @@ jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
     // Fire-and-forget: send FCM notifications to all users with tokens
     (async () => {
       try {
-        const users = await UserModel.find({ fcmTokens: { $exists: true, $ne: [] } }).select('fcmTokens').lean();
+        const users = await UserModel.find({ lastFcmToken: { $exists: true, $ne: '' } }).select('lastFcmToken').lean();
         const tokenSet = new Set<string>();
         for (const u of users as any[]) {
-          for (const t of (u.fcmTokens || []) as string[]) {
-            if (t) tokenSet.add(t);
-          }
+          const t = (u as any).lastFcmToken as string | undefined;
+          if (t && t.trim()) tokenSet.add(t.trim());
         }
         const tokens = Array.from(tokenSet);
 
         const title = 'New job created';
         const bodyText = `${doc.soNumber || 'SO'} in ${doc.customerCity || 'your area'}`;
-        const data = { type: 'new_job', soNumber: String(doc.soNumber || ''), city: String(doc.customerCity || '') } as any;
+        const data = {
+          type: 'new_job',
+          jobId: String(doc._id),
+          soNumber: String(doc.soNumber || ''),
+          city: String(doc.customerCity || ''),
+        } as any;
 
         const previewTokens = tokens.slice(0, 5);
-        console.log('[JobCreate] Preparing notification', {
+        console.log('[JobCreate] Preparing notification (lastFcmToken only)', {
           tokensTotal: tokens.length,
           tokensPreview: previewTokens,
           message: { title, body: bodyText, data },
         });
+        // Pretty-print just the FCM payload details
+        console.log('[Notify] FCM payload (jobs)', JSON.stringify({ title, body: bodyText, data }, null, 2));
         // Print all FCM tokens as requested
         console.log('[JobCreate] All FCM tokens:', tokens);
 
