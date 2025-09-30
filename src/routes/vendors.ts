@@ -187,33 +187,32 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
     if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
 
     const vendorId = req.user.vendorId;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
     const [
       activeOrders,
       acceptedOrders,
-      receivedOrders,
-      problemOrders,
       availableOrders,
     ] = await Promise.all([
-      // Active: assigned or in_progress
-      JobAssignmentModel.countDocuments({ vendorId, status: { $in: ['assigned', 'in_progress'] } }),
-      // Accepted: explicitly assigned (claimed)
+      // Active: total orders for this vendor where scheduledDate is today or later
+      JobModel.countDocuments({ vendorId, scheduledDate: { $gte: startOfToday } }),
+      // Accepted: vendor's accepted assignments
       JobAssignmentModel.countDocuments({ vendorId, status: 'assigned' }),
-      // Received: all jobs ever assigned to this vendor (any status)
-      JobAssignmentModel.countDocuments({ vendorId }),
-      // Problem: flagged/problem state
-      JobAssignmentModel.countDocuments({ vendorId, status: 'problem' }),
       // Available: open jobs not yet assigned (global)
       JobModel.countDocuments({ status: /^available$/i }),
     ]);
 
-    const totalServiceOrders = Math.max(receivedOrders, activeOrders + (receivedOrders - activeOrders));
+    const receivedOrders = activeOrders; // per request, same as active for now
+    const problemOrders = 0; // per request, always 0
+
     const safeDiv = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
+    const base = receivedOrders || activeOrders || 1;
     const pieBreakdown = [
-      { key: 'active', count: activeOrders, percent: safeDiv(activeOrders, receivedOrders || totalServiceOrders) },
-      { key: 'accepted', count: acceptedOrders, percent: safeDiv(acceptedOrders, receivedOrders || totalServiceOrders) },
-      { key: 'received', count: receivedOrders, percent: safeDiv(receivedOrders, receivedOrders || totalServiceOrders) },
-      { key: 'problem', count: problemOrders, percent: safeDiv(problemOrders, receivedOrders || totalServiceOrders) },
+      { key: 'active', count: activeOrders, percent: safeDiv(activeOrders, base) },
+      { key: 'accepted', count: acceptedOrders, percent: safeDiv(acceptedOrders, base) },
+      { key: 'received', count: receivedOrders, percent: safeDiv(receivedOrders, base) },
+      { key: 'problem', count: problemOrders, percent: safeDiv(problemOrders, base) },
     ];
 
     return res.json({
@@ -221,10 +220,7 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
       data: {
         date: new Date().toISOString(),
         greetingName: vendor.name || null,
-        totals: {
-          serviceOrders: receivedOrders,
-          availableOrders,
-        },
+        totals: { serviceOrders: receivedOrders, availableOrders },
         kpis: {
           activeOrders,
           acceptedOrders,
