@@ -4,6 +4,8 @@ import { VendorModel } from '../models/vendor';
 import { OrderModel } from '../models/order';
 import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
+import { PartModel } from '../models/part';
+import mongoose from 'mongoose';
 
 export const vendorsRouter = Router();
 
@@ -41,6 +43,80 @@ vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor' });
+  }
+});
+
+// POST /api/vendors/me/parts
+// Add one or more parts to an assignment that belongs to the authenticated vendor
+vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    const { assignmentId, parts, partNumber, partName, quantity, unitCost, notes } = req.body || {};
+    if (!assignmentId || !mongoose.isValidObjectId(String(assignmentId))) {
+      return res.status(400).json({ success: false, message: 'assignmentId is required' });
+    }
+
+    // Ensure assignment exists and belongs to this vendor
+    const assignment = await JobAssignmentModel.findById(assignmentId).lean();
+    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (String(assignment.vendorId) !== String(req.user.vendorId)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+
+    const toCreate: Array<{ assignmentId: string; jobId: string; partNumber?: string; partName?: string; quantity?: number; unitCost?: number; notes?: string }> = [];
+
+    const base = {
+      assignmentId: String(assignmentId),
+      jobId: String(assignment.jobId),
+    } as any;
+
+    if (Array.isArray(parts) && parts.length > 0) {
+      for (const p of parts) {
+        toCreate.push({
+          ...base,
+          partNumber: p.partNumber,
+          partName: p.partName,
+          quantity: p.quantity,
+          unitCost: p.unitCost,
+          notes: p.notes,
+        });
+      }
+    } else {
+      // Single part payload
+      toCreate.push({
+        ...base,
+        partNumber,
+        partName,
+        quantity,
+        unitCost,
+        notes,
+      });
+    }
+
+    // Filter out completely empty items (no identifiers)
+    const filtered = toCreate.filter((p) => p.partNumber || p.partName);
+    if (filtered.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid parts to add' });
+    }
+
+    const created = await PartModel.insertMany(filtered);
+    const data = created.map((c) => ({
+      id: String(c._id),
+      assignmentId: String(c.assignmentId),
+      jobId: String(c.jobId),
+      partNumber: c.partNumber,
+      partName: c.partName,
+      quantity: c.quantity,
+      unitCost: c.unitCost,
+      totalCost: (c as any).totalCost,
+      notes: (c as any).notes,
+      addedAt: c.createdAt,
+    }));
+
+    return res.status(201).json({ success: true, count: data.length, data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to add parts' });
   }
 });
 

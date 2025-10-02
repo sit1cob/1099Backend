@@ -49,6 +49,26 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "register-vendor"]
             },
+        {
+          "name": "Add Parts (Me)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignmentId\": \"{{assignmentId}}\",\n  \"parts\": [\n    { \n      \"partNumber\": \"WP2198202\",\n      \"partName\": \"Refrigerator Water Filter\",\n      \"quantity\": 1,\n      \"unitCost\": 45.99,\n      \"notes\": \"OEM replacement\"\n    }\n  ]\n}"
+            }
+          },
+          "description": "Add one or more parts to an assignment that belongs to the authenticated vendor. Supports single part fields or a 'parts' array."
+        },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"vendorName\": \"AIJ_Appliances\",\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"email\": \"aij@example.com\",\n  \"phone\": \"+14083481485\",\n  \"serviceAreas\": [\"60607\", \"60611\", \"60601\"],\n  \"appliances\": [\"Refrigerator\", \"Air Conditioner\"],\n  \"available\": true\n}"
@@ -356,12 +376,59 @@
           }
         }
       ]
+    },
+    {
+      "name": "Assignments",
+      "item": [
+        {
+          "name": "Update Assignment - Arrived",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"arrived\",\n  \"actualArrival\": \"2024-03-20T08:15:00Z\",\n  \"notes\": \"Arrived at customer location\"\n}"
+            }
+          },
+          "description": "Mark an assignment as arrived. All fields except status are optional."
+        },
+        {
+          "name": "Update Assignment - Completed",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\",\n  \"completedAt\": \"2024-03-20T11:00:00Z\",\n  \"completionNotes\": \"Replaced water filter and cleaned coils. Refrigerator cooling normally.\",\n  \"customerSignature\": \"base64_encoded_signature_image\",\n  \"laborHours\": 1.5,\n  \"totalPartsCost\": 45.99,\n  \"totalLaborCost\": 150.00,\n  \"totalCost\": 195.99\n}"
+            }
+          },
+          "description": "Complete an assignment with optional cost and signature details. All fields except status are optional."
+        }
+      ]
     }
   ],
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:5001" },
+    { "key": "baseUri", "value": "http://localhost:5001" },
     { "key": "accessToken", "value": "" },
     { "key": "jobId", "value": "" },
+    { "key": "assignmentId", "value": "" },
     { "key": "fcmToken", "value": "" }
   ]
 }
