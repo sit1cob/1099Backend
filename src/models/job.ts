@@ -24,6 +24,7 @@ const JobSchema = new Schema({
   productCategory: { type: String },
   priority: { type: String, default: 'medium' },
   vendorId: { type: Types.ObjectId, ref: 'Vendor' },
+  assignmentId: { type: Types.ObjectId, ref: 'JobAssignment' },
 }, { timestamps: true });
 
 // Logging: mark if doc is new in pre-save, then log in post-save

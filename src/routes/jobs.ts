@@ -39,6 +39,7 @@ function mapToJobDTO(doc: any) {
     priority: doc.priority || 'medium',
     status: doc.status || 'available',
     vendorId: doc.vendorId ? String(doc.vendorId) : null,
+    assignmentId: doc.assignmentId ? String(doc.assignmentId) : null,
   };
 }
 
@@ -199,7 +200,18 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     // Fetch parts linked to this job id
     const parts = await PartModel.find({ jobId: new mongoose.Types.ObjectId(id) }).sort({ createdAt: -1 }).lean();
 
-    return res.json({ success: true, data: { ...mapToJobDTO(doc), parts } });
+    // Ensure we return assignmentId even if not stored on job yet
+    let assignmentId: string | null = (doc as any).assignmentId ? String((doc as any).assignmentId) : null;
+    if (!assignmentId) {
+      const latest = await JobAssignmentModel.findOne({ jobId: new mongoose.Types.ObjectId(id) })
+        .sort({ assignedAt: -1, createdAt: -1 })
+        .select('_id')
+        .lean();
+      assignmentId = latest ? String(latest._id) : null;
+    }
+
+    const dto = { ...mapToJobDTO(doc), assignmentId } as any;
+    return res.json({ success: true, data: { ...dto, parts } });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch job' });
   }
@@ -232,23 +244,23 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
       // Reflect user's current action on the Job/Order
       if (job) {
         if (normalizedAction === 'accept') {
-          await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+          await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: existing._id } });
         } else {
           // decline -> make it available again and clear vendor
-          await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } });
+          await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } });
         }
       } else if (order) {
         try {
           if (normalizedAction === 'accept') {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: existing._id } as any });
           } else {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } } as any);
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } } as any);
           }
         } catch {
           if (normalizedAction === 'accept') {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, assignmentId: existing._id } as any });
           } else {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '' } } as any);
+            await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '', assignmentId: '' } } as any);
           }
         }
       }
@@ -277,24 +289,24 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
     // Reflect claim/decline on the Job/Order document
     if (job) {
       if (normalizedAction === 'accept') {
-        await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } });
+        await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: assignment._id } });
       } else {
-        await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } });
+        await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } });
       }
     } else if (order) {
       // Legacy path: reflect on orders collection
       try {
         if (normalizedAction === 'accept') {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned' } as any });
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: assignment._id } as any });
         } else {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '' } } as any);
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } } as any);
         }
       } catch {
         // Some legacy orders may not have a status field
         if (normalizedAction === 'accept') {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId } as any });
+          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, assignmentId: assignment._id } as any });
         } else {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '' } } as any);
+          await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '', assignmentId: '' } } as any);
         }
       }
     }

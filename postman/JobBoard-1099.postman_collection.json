@@ -261,6 +261,26 @@
           }
         },
         {
+          "name": "Add Parts (Me)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignmentId\": \"{{assignmentId}}\",\n  \"parts\": [\n    {\n      \"partNumber\": \"WP2198202\",\n      \"partName\": \"Refrigerator Water Filter\",\n      \"quantity\": 1,\n      \"unitCost\": 45.99\n    }\n  ]\n}"
+            }
+          },
+          "description": "Add one or more parts to an assignment that belongs to the authenticated vendor."
+        },
+        {
           "name": "Dashboard",
           "request": {
             "method": "GET",
