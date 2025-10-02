@@ -101,7 +101,7 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
     }
 
     const created = await PartModel.insertMany(filtered);
-    const data = created.map((c) => ({
+    const items = created.map((c) => ({
       id: String(c._id),
       assignmentId: String(c.assignmentId),
       jobId: String(c.jobId),
@@ -111,10 +111,13 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
       unitCost: c.unitCost,
       totalCost: (c as any).totalCost,
       notes: (c as any).notes,
-      addedAt: c.createdAt,
+      addedAt: (c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt || new Date().toISOString())),
     }));
 
-    return res.status(201).json({ success: true, count: data.length, data });
+    if (items.length === 1) {
+      return res.status(201).json({ success: true, data: items[0] });
+    }
+    return res.status(201).json({ success: true, count: items.length, data: items });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to add parts' });
   }

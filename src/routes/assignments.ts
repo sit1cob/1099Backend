@@ -88,11 +88,10 @@ async function updateAssignment(req: AuthenticatedRequest, res: any) {
       notes,
     } = req.body || {};
 
-    // Normalize status: if client sends 'arrived', keep status as 'assigned'
-    // (business rule: arrival doesn't change overall state away from assigned)
+    // Business rule: when client sends 'arrived', persist status as 'arrived'
     if (status) {
       const normalized = String(status).toLowerCase();
-      assignment.status = normalized === 'arrived' ? 'assigned' : status;
+      assignment.status = normalized === 'arrived' ? 'arrived' : status;
     }
     if (actualArrival) assignment.arrivedAt = new Date(actualArrival);
     if (completedAt) assignment.completedAt = new Date(completedAt);
@@ -106,8 +105,21 @@ async function updateAssignment(req: AuthenticatedRequest, res: any) {
 
     await assignment.save();
 
+    // Mirror status onto underlying Job/Order document
+    try {
+      const normalizedNow = (status || assignment.status || '').toString().toLowerCase();
+      if (normalizedNow === 'arrived') {
+        // Set job/order status to 'arrived' when tech arrives
+        await JobModel.updateOne({ _id: new mongoose.Types.ObjectId(String(assignment.jobId)) }, { $set: { status: 'arrived' } }).catch(() => {});
+        await OrderModel.updateOne({ _id: new mongoose.Types.ObjectId(String(assignment.jobId)) }, { $set: { status: 'arrived' } } as any).catch(() => {});
+      } else if (normalizedNow === 'completed') {
+        await JobModel.updateOne({ _id: new mongoose.Types.ObjectId(String(assignment.jobId)) }, { $set: { status: 'completed' } });
+        await OrderModel.updateOne({ _id: new mongoose.Types.ObjectId(String(assignment.jobId)) }, { $set: { status: 'completed' } } as any).catch(() => {});
+      }
+    } catch {}
+
     // Optional invoice stub when completed
-    const invoice = status === 'completed' || assignment.status === 'completed'
+    const invoice = assignment.status === 'completed' || String(status || '').toLowerCase() === 'completed'
       ? {
           invoiceNumber: `INV-${new Date().getFullYear()}-${String(assignment._id).slice(-4)}`,
           totalCost: (assignment as any).totalCost || 0,
