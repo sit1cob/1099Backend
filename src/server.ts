@@ -8,8 +8,13 @@ import { connectMongo } from './mongo/connection';
 import { authRouter } from './routes/auth';
 import { vendorsRouter } from './routes/vendors';
 import { jobsRouter } from './routes/jobs';
+import { assignmentsRouter } from './routes/assignments';
 import { usersRouter } from './routes/users';
+<<<<<<< HEAD
 import { startJobWatcher } from './services/jobWatcher';
+=======
+import { partsRouter } from './routes/parts';
+>>>>>>> 73caa0f (added parts)
 
 const PORT = Number(process.env.PORT || 5001);
 
@@ -32,6 +37,8 @@ async function main() {
   app.use('/api/auth', authRouter);
   app.use('/api/vendors', vendorsRouter);
   app.use('/api/jobs', jobsRouter);
+  app.use('/api/assignments', assignmentsRouter);
+  app.use('/api/parts', partsRouter);
   app.use('/api/users', usersRouter);
 
   // Not found handler

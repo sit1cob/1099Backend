@@ -51,6 +51,7 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
     const city = (req.query.city as string | undefined)?.trim();
     const applianceType = (req.query.applianceType as string | undefined)?.trim();
 
+<<<<<<< HEAD
     const filter: Record<string, any> = {};
     // Only list truly available jobs
     filter.status = /^available$/i;
@@ -67,6 +68,34 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
         filter._id = { $nin: declinedJobIds };
       }
     }
+=======
+    const vendor: any = await VendorModel.findById(req.user.vendorId).lean();
+    if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
+
+    // Pagination & filters
+    const page = Math.max(1, parseInt(String((req.query.page as string) || '1')));
+    const pageSize = Math.max(1, Math.min(100, parseInt(String((req.query.pageSize as string) || '20'))));
+    const city = (req.query.city as string) || undefined;
+    const applianceType = (req.query.applianceType as string) || undefined;
+
+    const findQuery: any = { vendorName: vendor.name };
+    if (city) findQuery.customerCity = city;
+    if (applianceType) {
+      // Orders may store type in raw.HS_SP_CD or raw.SPECIALTY; include heuristic filter
+      findQuery.$or = [
+        { applianceType },
+        { 'raw.HS_SP_CD': applianceType },
+        { 'raw.SPECIALTY': applianceType },
+      ];
+    }
+
+    const total = await OrderModel.countDocuments(findQuery);
+    const orders = await OrderModel.find(findQuery)
+      .sort({ scheduledDate: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .lean();
+>>>>>>> 73caa0f (added parts)
 
     const total = await JobModel.countDocuments(filter);
     const docs = await JobModel.find(filter)
@@ -81,8 +110,18 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
     return res.json({
       success: true,
       data: {
+<<<<<<< HEAD
         jobs,
         pagination: { page, pageSize, total, totalPages },
+=======
+        jobs: available,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+>>>>>>> 73caa0f (added parts)
       },
     });
   } catch (err: any) {
@@ -195,7 +234,10 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     }
     if (!doc) return res.status(404).json({ success: false, message: 'Job not found' });
 
-    return res.json({ success: true, data: mapToJobDTO(doc) });
+    // Fetch parts linked to this job id
+    const parts = await PartModel.find({ jobId: new mongoose.Types.ObjectId(id) }).sort({ createdAt: -1 }).lean();
+
+    return res.json({ success: true, data: { ...mapToJobDTO(doc), parts } });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch job' });
   }
