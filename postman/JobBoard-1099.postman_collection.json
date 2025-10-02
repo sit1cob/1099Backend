@@ -258,7 +258,29 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "vendors", "me", "assignments"]
             }
-          }
+          },
+          "description": "Returns the authenticated vendor's assignments, enriched with job details: customerName, soNumber, and address.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success true', function () { pm.expect(json.success).to.be.true; });",
+                  "if (json && Array.isArray(json.data) && json.data.length > 0) {",
+                  "  const first = json.data[0];",
+                  "  pm.test('has customerName', function () { pm.expect(first).to.have.property('customerName'); });",
+                  "  pm.test('has soNumber', function () { pm.expect(first).to.have.property('soNumber'); });",
+                  "  pm.test('has address', function () { pm.expect(first).to.have.property('address'); });",
+                  "  if (first.id) pm.collectionVariables.set('assignmentId', first.id);",
+                  "  if (first.jobId) pm.collectionVariables.set('jobId', first.jobId);",
+                  "} else { pm.collectionVariables.unset('assignmentId'); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Add Parts (Me)",

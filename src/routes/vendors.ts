@@ -248,9 +248,46 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
   try {
     if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
 
-    const assignments = await JobAssignmentModel.find({ vendorId: req.user.vendorId }).sort({ assignedAt: -1 }).lean();
+    const assignments = await JobAssignmentModel.find({ vendorId: req.user.vendorId })
+      .sort({ assignedAt: -1, createdAt: -1 })
+      .lean();
 
-    return res.json({ success: true, data: assignments, count: assignments.length });
+    // Gather related job/order docs to enrich each assignment with customer/job info
+    const jobIds = Array.from(new Set(assignments.map((a: any) => String(a.jobId)).filter(Boolean)));
+    const objIds = jobIds.filter((id) => mongoose.isValidObjectId(id)).map((id) => new mongoose.Types.ObjectId(id));
+
+    const [jobs, orders] = await Promise.all([
+      JobModel.find({ _id: { $in: objIds } }).lean(),
+      OrderModel.find({ _id: { $in: objIds } }).lean(),
+    ]);
+
+    const jobMap = new Map<string, any>();
+    for (const j of jobs as any[]) jobMap.set(String(j._id), j);
+    for (const o of orders as any[]) if (!jobMap.has(String(o._id))) jobMap.set(String(o._id), o);
+
+    const enriched = assignments.map((a: any) => {
+      const j = jobMap.get(String(a.jobId)) || {};
+      const soNumber = j.soNumber || j.raw?.SO_NO || `SO-${String(a.jobId || a._id).slice(-6)}`;
+      const custName = j.customerName || j.raw?.CUS_NM || null;
+      const addressParts = [j.customerAddress, j.customerCity, j.customerState, j.customerZip].filter(Boolean);
+      const address = addressParts.length ? addressParts.join(', ') : null;
+      return {
+        id: String(a._id),
+        jobId: String(a.jobId),
+        vendorId: String(a.vendorId),
+        status: a.status,
+        assignedAt: a.assignedAt || a.createdAt || null,
+        arrivedAt: a.arrivedAt || null,
+        completedAt: a.completedAt || null,
+        notes: a.notes || null,
+        // Extra fields from job details
+        customerName: custName,
+        soNumber,
+        address,
+      };
+    });
+
+    return res.json({ success: true, data: enriched, count: enriched.length });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignments' });
   }
