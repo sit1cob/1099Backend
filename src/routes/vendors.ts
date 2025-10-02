@@ -323,12 +323,13 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
     const problemOrders = 0; // per request, always 0
 
     const safeDiv = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
-    const base = receivedOrders || activeOrders || 1;
+    // Percentages should be relative to the sum of all displayed segments
+    const segmentTotal = activeOrders + acceptedOrders + receivedOrders + problemOrders;
     const pieBreakdown = [
-      { key: 'active', count: activeOrders, percent: safeDiv(activeOrders, base) },
-      { key: 'accepted', count: acceptedOrders, percent: safeDiv(acceptedOrders, base) },
-      { key: 'received', count: receivedOrders, percent: safeDiv(receivedOrders, base) },
-      { key: 'problem', count: problemOrders, percent: safeDiv(problemOrders, base) },
+      { key: 'active', count: activeOrders, percent: safeDiv(activeOrders, segmentTotal) },
+      { key: 'accepted', count: acceptedOrders, percent: safeDiv(acceptedOrders, segmentTotal) },
+      { key: 'received', count: receivedOrders, percent: safeDiv(receivedOrders, segmentTotal) },
+      { key: 'problem', count: problemOrders, percent: safeDiv(problemOrders, segmentTotal) },
     ];
 
     return res.json({
