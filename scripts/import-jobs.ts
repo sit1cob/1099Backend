@@ -4,11 +4,8 @@ import fs from 'fs';
 import XLSX from 'xlsx';
 import { connectMongo, disconnectMongo } from '../src/mongo/connection';
 import { JobModel } from '../src/models/job';
-<<<<<<< HEAD
 import { UserModel } from '../src/models/user';
 import { sendMulticast, chunk } from '../src/services/fcm';
-=======
->>>>>>> 73caa0f (added parts)
 
 const DEFAULT_FILE = path.join(process.cwd(), '..', 'docs', '2025-09-25 2_35pm.csv');
 
@@ -38,7 +35,6 @@ async function main() {
   const sheet = wb.SheetNames[0];
   const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { defval: '' });
 
-<<<<<<< HEAD
   const notify = process.argv.includes('--notify');
   let count = 0;
   const newlyCreatedJobSummaries: { soNumber?: string; customerCity?: string; vendorName?: string }[] = [];
@@ -46,12 +42,6 @@ async function main() {
     const soNumber = pickFirst<string>(row, ['SO_NO', 'so_number', 'SO#', 'SO', 'SO Number']);
     const serviceUnitNumber = pickFirst<string>(row, ['SVC_UN_NO', 'service_unit_number']);
     const vendorName = pickFirst<string>(row, ['VENDOR', 'Vendor', 'vendor']);
-=======
-  let count = 0;
-  for (const row of rows) {
-    const soNumber = pickFirst<string>(row, ['SO_NO', 'so_number', 'SO#', 'SO', 'SO Number']);
-    const serviceUnitNumber = pickFirst<string>(row, ['SVC_UN_NO', 'service_unit_number']);
->>>>>>> 73caa0f (added parts)
     const customerCity = pickFirst<string>(row, ['CUS_CTY_NM', 'customer_city', 'City']);
     const customerState = pickFirst<string>(row, ['CUS_ST_CD', 'customer_state', 'State']);
     const customerZip = pickFirst<string>(row, ['ZIP_CD', 'CN_ZIP_PC', 'customer_zip', 'Zip']);
@@ -66,10 +56,7 @@ async function main() {
     const doc = {
       soNumber,
       serviceUnitNumber,
-<<<<<<< HEAD
       vendorName,
-=======
->>>>>>> 73caa0f (added parts)
       customerCity,
       customerState,
       customerZip,
@@ -88,27 +75,19 @@ async function main() {
       continue;
     }
 
-<<<<<<< HEAD
     const res = await JobModel.updateOne(
-=======
-    await JobModel.updateOne(
->>>>>>> 73caa0f (added parts)
       { soNumber },
       { $set: doc, $setOnInsert: { createdAt: new Date() } },
       { upsert: true }
     );
-<<<<<<< HEAD
     if (notify && res.upsertedCount && res.upsertedCount > 0) {
       newlyCreatedJobSummaries.push({ soNumber, customerCity, vendorName });
     }
-=======
->>>>>>> 73caa0f (added parts)
     count++;
   }
 
   await disconnectMongo();
   console.log(`Imported/Upserted ${count} jobs from ${path.basename(inputFile)} into 'jobs' collection`);
-<<<<<<< HEAD
 
   if (notify && newlyCreatedJobSummaries.length > 0) {
     // Fetch unique FCM tokens
@@ -131,8 +110,6 @@ async function main() {
     }
     console.log(`[FCM] Sent notifications: success=${success}, failure=${failure}, recipients=${tokens.length}`);
   }
-=======
->>>>>>> 73caa0f (added parts)
 }
 
 main().catch(async (err) => {

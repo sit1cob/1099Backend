@@ -10,11 +10,8 @@ import { vendorsRouter } from './routes/vendors';
 import { jobsRouter } from './routes/jobs';
 import { assignmentsRouter } from './routes/assignments';
 import { usersRouter } from './routes/users';
-<<<<<<< HEAD
 import { startJobWatcher } from './services/jobWatcher';
-=======
 import { partsRouter } from './routes/parts';
->>>>>>> 73caa0f (added parts)
 
 const PORT = Number(process.env.PORT || 5001);
 

@@ -177,7 +177,6 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-<<<<<<< HEAD
 // GET /api/vendors/me/dashboard
 // Returns KPI-style metrics for the vendor dashboard
 vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
@@ -236,79 +235,5 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to load dashboard' });
-=======
-// POST /api/vendors/me/parts
-// Accepts either a single part object or an array of parts
-// If jobId is provided without assignmentId, find the vendor's assignment for that job
-vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
-
-    const payload = req.body;
-    // Support either array of parts, single part, or { assignmentId, jobId, parts: [...] }
-    const baseAssignmentId = payload?.assignmentId;
-    const baseJobId = payload?.jobId;
-    const itemsSource = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.parts)
-        ? payload.parts
-        : [payload];
-    const items = itemsSource;
-    if (items.length === 0) return res.status(400).json({ success: false, message: 'No parts data provided' });
-
-    const createdIds: string[] = [];
-
-    for (const part of items) {
-      const { assignmentId, jobAssignmentId, jobId } = part || {};
-
-      // Resolve assignmentId
-      let resolvedAssignmentId: string | undefined = assignmentId || jobAssignmentId || baseAssignmentId;
-      let resolvedJobId: string | undefined = jobId || baseJobId;
-
-      if (!resolvedAssignmentId && !resolvedJobId) {
-        return res.status(400).json({ success: false, message: 'Either assignmentId, jobAssignmentId, or jobId is required' });
-      }
-
-      if (!resolvedAssignmentId && resolvedJobId) {
-        if (!mongoose.isValidObjectId(resolvedJobId)) return res.status(400).json({ success: false, message: 'Invalid jobId' });
-        // Find the vendor's assignment for this job
-        const assignment = await JobAssignmentModel.findOne({ jobId: new mongoose.Types.ObjectId(resolvedJobId), vendorId: req.user.vendorId }).lean();
-        if (!assignment) return res.status(404).json({ success: false, message: 'Assignment for this job not found' });
-        resolvedAssignmentId = String(assignment._id);
-      }
-
-      if (!mongoose.isValidObjectId(resolvedAssignmentId!)) return res.status(400).json({ success: false, message: 'Invalid assignmentId' });
-
-      // If jobId still not set, fetch from assignment
-      if (!resolvedJobId) {
-        const assignment = await JobAssignmentModel.findById(resolvedAssignmentId).lean();
-        if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
-        resolvedJobId = String(assignment.jobId);
-      }
-
-      if (!mongoose.isValidObjectId(resolvedJobId!)) return res.status(400).json({ success: false, message: 'Invalid jobId' });
-
-      const created = await PartModel.create({
-        assignmentId: new mongoose.Types.ObjectId(resolvedAssignmentId),
-        jobId: new mongoose.Types.ObjectId(resolvedJobId),
-        partNumber: part.partNumber,
-        partName: part.partName,
-        quantity: part.quantity,
-        unitCost: part.unitCost,
-        notes: part.notes,
-        addedByUserId: req.user.userId && mongoose.isValidObjectId(String(req.user.userId)) ? new mongoose.Types.ObjectId(String(req.user.userId)) : undefined,
-      });
-
-      createdIds.push(String(created._id));
-    }
-
-    if (Array.isArray(payload) || Array.isArray(payload?.parts)) {
-      return res.status(201).json({ success: true, data: { count: createdIds.length, ids: createdIds }, message: `${createdIds.length} parts added successfully` });
-    } else {
-      return res.status(201).json({ success: true, data: { id: createdIds[0] }, message: 'Part added successfully' });
-    }
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to add parts' });
->>>>>>> 73caa0f (added parts)
   }
 });
