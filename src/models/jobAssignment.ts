@@ -10,6 +10,13 @@ const JobAssignmentSchema = new Schema({
   completedAt: { type: Date },
   completionNotes: { type: String },
   vendorNotes: { type: String },
+  // Optional operational fields
+  notes: { type: String },
+  customerSignature: { type: String },
+  laborHours: { type: Number },
+  totalPartsCost: { type: Number },
+  totalLaborCost: { type: Number },
+  totalCost: { type: Number },
   action: { type: String, enum: ['accept', 'decline', 'assigned'], default: 'assigned' },
 }, { timestamps: true });
 

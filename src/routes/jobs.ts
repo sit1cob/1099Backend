@@ -7,6 +7,7 @@ import { JobAssignmentModel } from '../models/jobAssignment';
 import { UserModel } from '../models/user';
 import { sendMulticast, chunk } from '../services/fcm';
 import mongoose from 'mongoose';
+import { PartModel } from '../models/part';
 
 export const jobsRouter = Router();
 
