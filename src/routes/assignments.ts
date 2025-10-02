@@ -88,7 +88,12 @@ async function updateAssignment(req: AuthenticatedRequest, res: any) {
       notes,
     } = req.body || {};
 
-    if (status) assignment.status = status;
+    // Normalize status: if client sends 'arrived', keep status as 'assigned'
+    // (business rule: arrival doesn't change overall state away from assigned)
+    if (status) {
+      const normalized = String(status).toLowerCase();
+      assignment.status = normalized === 'arrived' ? 'assigned' : status;
+    }
     if (actualArrival) assignment.arrivedAt = new Date(actualArrival);
     if (completedAt) assignment.completedAt = new Date(completedAt);
     if (completionNotes !== undefined) assignment.completionNotes = completionNotes;
