@@ -59,14 +59,44 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
     if (city) filter.customerCity = new RegExp(`^${city}$`, 'i');
     if (applianceType) filter.applianceType = new RegExp(`^${applianceType}$`, 'i');
 
-    // Exclude jobs this vendor has previously declined
+    // Exclude jobs this vendor has previously declined and scope by vendor's serviceAreas/appliances
     if (req.user?.vendorId) {
-      const declined = await JobAssignmentModel.find({ vendorId: req.user.vendorId, status: 'declined' })
-        .select('jobId')
-        .lean();
+      const [declined, vendor] = await Promise.all([
+        JobAssignmentModel.find({ vendorId: req.user.vendorId, status: 'declined' })
+          .select('jobId')
+          .lean(),
+        VendorModel.findById(req.user.vendorId).lean(),
+      ]);
+
       const declinedJobIds = declined.map((d: any) => d.jobId).filter(Boolean);
       if (declinedJobIds.length > 0) {
         filter._id = { $nin: declinedJobIds };
+      }
+
+      if (vendor) {
+        const serviceAreas = ((vendor as any).serviceAreas || (vendor as any).zipCodes || [])
+          .map((z: any) => String(z).trim())
+          .filter(Boolean);
+        const appliances = ((vendor as any).appliances || [])
+          .map((a: any) => String(a).trim())
+          .filter(Boolean);
+        if (serviceAreas.length > 0) {
+          filter.customerZip = { $in: serviceAreas };
+        }
+        if (appliances.length > 0) {
+          filter.applianceType = { $in: appliances };
+        }
+        // Debug: print applied scoping (remove in production)
+        console.log('[JobsAvailable] vendor scope', {
+          vendorId: String(req.user.vendorId),
+          serviceAreas,
+          appliances,
+          filter,
+        });
+      } else {
+        // If user claims to be a vendor but vendor record is missing, default to no jobs
+        console.warn('[JobsAvailable] vendorId present but vendor not found', { vendorId: String(req.user.vendorId) });
+        return res.json({ success: true, data: { jobs: [], pagination: { page, pageSize, total: 0, totalPages: 1 } } });
       }
     }
 
@@ -130,10 +160,44 @@ jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
       vendorId: body.vendorId && mongoose.isValidObjectId(body.vendorId) ? new mongoose.Types.ObjectId(body.vendorId) : undefined,
     });
 
-    // Fire-and-forget: send FCM notifications to all users with tokens
+    // Fire-and-forget: send FCM notifications to users for vendors matching zipcode/appliance
     (async () => {
       try {
-        const users = await UserModel.find({ lastFcmToken: { $exists: true, $ne: '' } }).select('lastFcmToken').lean();
+        const zip = String(doc.customerZip || '').trim();
+        const appliance = String(doc.applianceType || '').trim();
+        const vendorFilter: any = {};
+        if (zip) vendorFilter.serviceAreas = { $in: [new RegExp(`^${zip}$`, 'i')] };
+        if (appliance) vendorFilter.appliances = { $in: [new RegExp(`^${appliance}$`, 'i')] };
+
+        const vendors = await VendorModel.find(vendorFilter).select('_id name').lean();
+        const vendorIds = vendors.map((v: any) => v._id).filter(Boolean);
+
+        // Auto-assign if exactly one vendor matches criteria
+        if (vendorIds.length === 1) {
+          try {
+            const chosenVendorId = vendorIds[0];
+            const jobObjectId = new mongoose.Types.ObjectId(String(doc._id));
+            // Create assignment as 'assigned'
+            const assignment = await JobAssignmentModel.create({
+              jobId: jobObjectId,
+              vendorId: chosenVendorId,
+              status: 'assigned',
+              action: 'accept',
+            } as any);
+            // Reflect on Job/Order
+            await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: chosenVendorId, status: 'assigned', assignmentId: assignment._id } });
+            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: chosenVendorId, status: 'assigned', assignmentId: assignment._id } } as any).catch(() => {});
+          } catch (autoErr) {
+            console.warn('[JobCreate] Auto-assign failed, continuing with notifications', autoErr);
+          }
+        }
+
+        const users = vendorIds.length
+          ? await UserModel.find({ vendorId: { $in: vendorIds }, lastFcmToken: { $exists: true, $ne: '' } })
+              .select('lastFcmToken vendorId')
+              .lean()
+          : [];
+
         const tokenSet = new Set<string>();
         for (const u of users as any[]) {
           const t = (u as any).lastFcmToken as string | undefined;
