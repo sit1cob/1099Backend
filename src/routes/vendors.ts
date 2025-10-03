@@ -36,6 +36,8 @@ vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
         name: vendor.name,
         phoneNumber: (vendor as any).phone || null,
         email: (vendor as any).email || null,
+        serviceAreas: (vendor as any).serviceAreas || (vendor as any).zipCodes || [],
+        appliances: (vendor as any).appliances || [],
         isActive: vendor.isActive !== false,
         createdAt: (vendor as any).createdAt || null,
         stats: { totalJobs, completedJobs, averageRating },

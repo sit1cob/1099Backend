@@ -43,6 +43,11 @@ function mapToJobDTO(doc: any) {
     assignmentId: doc.assignmentId ? String(doc.assignmentId) : null,
     customerPhone: doc.customerPhone || null,
     customerEmail: doc.customerEmail || null,
+    productInfoUpdate: {
+      productLine: (doc.productInfoUpdate && doc.productInfoUpdate.productLine) || null,
+      brand: (doc.productInfoUpdate && doc.productInfoUpdate.brand) || null,
+      imageUrl: (doc.productInfoUpdate && doc.productInfoUpdate.imageUrl) || null,
+    },
   };
 }
 
@@ -282,6 +287,40 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     return res.json({ success: true, data: { ...dto, parts } });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch job' });
+  }
+});
+
+// PATCH /api/jobs/:id/product-info-update
+// Allows the assigned vendor to update product details: productLine, brand, imageUrl
+jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid job id' });
+
+    const job = await JobModel.findById(id).lean();
+    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+    // Only the vendor assigned to this job can update product info
+    if (!job.vendorId || String(job.vendorId) !== String(req.user.vendorId)) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this job' });
+    }
+
+    const { productLine, brand, imageUrl } = (req.body || {}) as { productLine?: string; brand?: string; imageUrl?: string };
+    if (productLine == null && brand == null && imageUrl == null) {
+      return res.status(400).json({ success: false, message: 'No fields to update. Provide productLine, brand, or imageUrl.' });
+    }
+
+    const set: any = {};
+    if (typeof productLine === 'string') set['productInfoUpdate.productLine'] = productLine;
+    if (typeof brand === 'string') set['productInfoUpdate.brand'] = brand;
+    if (typeof imageUrl === 'string') set['productInfoUpdate.imageUrl'] = imageUrl;
+
+    await JobModel.updateOne({ _id: id }, { $set: set });
+    const updated = await JobModel.findById(id).lean();
+    return res.json({ success: true, data: mapToJobDTO(updated) });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update product info' });
   }
 });
 

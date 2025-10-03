@@ -358,10 +358,26 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"soNumber\": \"TEST-123\",\n  \"customerName\": \"John Smith\",\n  \"customerCity\": \"Chicago\",\n  \"customerState\": \"IL\",\n  \"customerZip\": \"60607\",\n  \"scheduledDate\": \"2025-10-01T10:00:00Z\",\n  \"applianceType\": \"Refrigerator\",\n  \"manufacturerBrand\": \"Whirlpool\",\n  \"serviceDescription\": \"Not cooling\",\n  \"priority\": \"medium\"\n}"
+              "raw": "{\n  \"soNumber\": \"TEST-123\",\n  \"customerName\": \"John Smith\",\n  \"customerAddress\": \"123 Main St\",\n  \"customerCity\": \"Chicago\",\n  \"customerState\": \"IL\",\n  \"customerZip\": \"60607\",\n  \"customerPhone\": \"+1-312-555-0188\",\n  \"customerAltPhone\": \"+1-773-555-0199\",\n  \"customerEmail\": \"john.smith@example.com\",\n  \"scheduledDate\": \"2025-10-01T10:00:00Z\",\n  \"applianceType\": \"Refrigerator\",\n  \"manufacturerBrand\": \"Whirlpool\",\n  \"serviceDescription\": \"Not cooling\",\n  \"priority\": \"medium\"\n}"
             },
             "description": "Create a new job. Requires Authorization. The only required field is soNumber; other fields are optional."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success true', function () { pm.expect(json.success).to.be.true; });",
+                  "pm.test('has data', function () { pm.expect(json).to.have.property('data'); });",
+                  "pm.test('has customer fields', function () { const d = json.data; pm.expect(d).to.have.property('customerAddress'); pm.expect(d).to.have.property('customerPhone'); pm.expect(d).to.have.property('customerEmail'); });",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('jobId', json.data.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Get Job by ID",
@@ -375,7 +391,21 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "jobs", "{{jobId}}"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success true', function () { pm.expect(json.success).to.be.true; });",
+                  "pm.test('productInfoUpdate object', function () { pm.expect(json.data).to.have.property('productInfoUpdate'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Claim Job",
@@ -469,6 +499,50 @@
               "path": ["api", "assignments"]
             }
           }
+        }
+      ]
+    }
+    ,
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Upload Image to S3",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/uploads/image",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "uploads", "image"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success true', function () { pm.expect(json.success).to.be.true; });",
+                  "pm.test('url present', function () { pm.expect(json.data).to.have.property('url'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     }

@@ -12,6 +12,7 @@ import { assignmentsRouter } from './routes/assignments';
 import { usersRouter } from './routes/users';
 import { startJobWatcher } from './services/jobWatcher';
 import { partsRouter } from './routes/parts';
+import { uploadsRouter } from './routes/uploads';
 
 const PORT = Number(process.env.PORT || 5001);
 
@@ -36,6 +37,7 @@ async function main() {
   app.use('/api/jobs', jobsRouter);
   app.use('/api/assignments', assignmentsRouter);
   app.use('/api/parts', partsRouter);
+  app.use('/api/uploads', uploadsRouter);
   app.use('/api/users', usersRouter);
 
   // Not found handler

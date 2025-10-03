@@ -18,6 +18,12 @@ const JobSchema = new Schema({
   applianceCode: { type: String },
   manufacturerBrand: { type: String },
   serviceDescription: { type: String },
+  // Nested product details provided by vendor after taking the job
+  productInfoUpdate: {
+    productLine: { type: String },
+    brand: { type: String },
+    imageUrl: { type: String },
+  },
   customerType: { type: String, default: 'Residential' },
   status: { type: String, default: 'available' },
   requiredSkills: [{ type: String }],
