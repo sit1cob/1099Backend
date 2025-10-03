@@ -29,6 +29,7 @@ function mapToJobDTO(doc: any) {
     soNumber,
     customerName: firstName || customerName || null,
     customerLastName: lastName || null,
+    customerAddress: doc.customerAddress || null,
     customerCity: doc.customerCity || doc.raw?.CUS_CTY_NM || null,
     customerState: doc.customerState || doc.raw?.CUS_ST_CD || null,
     customerZip: doc.customerZip || doc.raw?.ZIP_CD || doc.raw?.CN_ZIP_PC || null,
@@ -40,6 +41,8 @@ function mapToJobDTO(doc: any) {
     status: doc.status || 'available',
     vendorId: doc.vendorId ? String(doc.vendorId) : null,
     assignmentId: doc.assignmentId ? String(doc.assignmentId) : null,
+    customerPhone: doc.customerPhone || null,
+    customerEmail: doc.customerEmail || null,
   };
 }
 
@@ -145,6 +148,7 @@ jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
       customerZip: body.customerZip,
       customerPhone: body.customerPhone,
       customerAltPhone: body.customerAltPhone,
+      customerEmail: body.customerEmail,
       scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : undefined,
       scheduledTimeWindow: typeof body.scheduledTimeWindow === 'string' ? body.scheduledTimeWindow : undefined,
       applianceType: body.applianceType,
