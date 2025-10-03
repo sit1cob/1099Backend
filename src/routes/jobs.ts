@@ -34,6 +34,7 @@ function mapToJobDTO(doc: any) {
     customerState: doc.customerState || doc.raw?.CUS_ST_CD || null,
     customerZip: doc.customerZip || doc.raw?.ZIP_CD || doc.raw?.CN_ZIP_PC || null,
     applianceType: doc.applianceType || doc.raw?.HS_SP_CD || doc.raw?.SPECIALTY || null,
+    manufacturerBrand: doc.manufacturerBrand || null,
     serviceDescription: doc.serviceDescription || doc.raw?.SVC_RQ_DS || doc.raw?.REPAIR_TYPE || null,
     scheduledDate: doc.scheduledDate || (doc.raw?.SVC_SCH_DT ? new Date(doc.raw.SVC_SCH_DT) : null),
     scheduledTimeWindow: doc.scheduledTimeWindow || null,

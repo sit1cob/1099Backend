@@ -198,6 +198,8 @@
                   "pm.test('name present', function () { pm.expect(json.data).to.have.property('name'); });",
                   "pm.test('phoneNumber present', function () { pm.expect(json.data).to.have.property('phoneNumber'); });",
                   "pm.test('email present', function () { pm.expect(json.data).to.have.property('email'); });",
+                  "pm.test('serviceAreas present', function () { pm.expect(json.data).to.have.property('serviceAreas'); pm.expect(json.data.serviceAreas).to.be.an('array'); });",
+                  "pm.test('appliances present', function () { pm.expect(json.data).to.have.property('appliances'); pm.expect(json.data.appliances).to.be.an('array'); });",
                   "pm.test('isActive present', function () { pm.expect(json.data).to.have.property('isActive'); });",
                   "pm.test('createdAt present', function () { pm.expect(json.data).to.have.property('createdAt'); });",
                   "pm.test('stats present with totals', function () { pm.expect(json.data).to.have.property('stats'); pm.expect(json.data.stats).to.have.property('totalJobs'); pm.expect(json.data.stats).to.have.property('completedJobs'); pm.expect(json.data.stats).to.have.property('averageRating'); });"
@@ -426,6 +428,40 @@
             },
             "description": "Vendor claims an available job. Body supports vendorNotes and action (accept | decline)."
           }
+        },
+        {
+          "name": "Update Product Info",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/{{jobId}}/product-info-update",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "{{jobId}}", "product-info-update"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productLine\": \"Free Standing Ice Maker\",\n  \"brand\": \"Kenmore\",\n  \"imageUrl\": \"https://sears-1099.s3.us-east-2.amazonaws.com/uploads/sample.jpg\"\n}"
+            }
+          },
+          "description": "Update one or all product fields (productLine, brand, imageUrl). Requires the job to be assigned to the authenticated vendor.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success true', function () { pm.expect(json.success).to.be.true; });",
+                  "pm.test('productInfoUpdate fields set', function () { const p = json.data.productInfoUpdate || {}; pm.expect(p).to.have.property('productLine'); pm.expect(p).to.have.property('brand'); pm.expect(p).to.have.property('imageUrl'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
