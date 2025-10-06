@@ -8,6 +8,7 @@ const PartSchema = new Schema({
   quantity: { type: Number, default: 1 },
   unitCost: { type: Number, default: 0 },
   totalCost: { type: Number, default: 0 },
+  part_status: { type: String, enum: ['ordered', 'inHand'], default: 'ordered' },
   notes: { type: String },
   addedByUserId: { type: Types.ObjectId, ref: 'User' },
 }, { timestamps: true });

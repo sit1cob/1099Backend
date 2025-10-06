@@ -54,7 +54,7 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
   try {
     if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    const { assignmentId, parts, partNumber, partName, quantity, unitCost, notes } = req.body || {};
+    const { assignmentId, parts, partNumber, partName, quantity, unitCost, part_status, notes } = req.body || {};
     if (!assignmentId || !mongoose.isValidObjectId(String(assignmentId))) {
       return res.status(400).json({ success: false, message: 'assignmentId is required' });
     }
@@ -66,7 +66,7 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
       return res.status(403).json({ success: false, message: 'Insufficient permissions' });
     }
 
-    const toCreate: Array<{ assignmentId: string; jobId: string; partNumber?: string; partName?: string; quantity?: number; unitCost?: number; notes?: string }> = [];
+    const toCreate: Array<{ assignmentId: string; jobId: string; partNumber?: string; partName?: string; quantity?: number; unitCost?: number; part_status?: string; notes?: string }> = [];
 
     const base = {
       assignmentId: String(assignmentId),
@@ -81,6 +81,7 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
           partName: p.partName,
           quantity: p.quantity,
           unitCost: p.unitCost,
+          part_status: p.part_status,
           notes: p.notes,
         });
       }
@@ -92,6 +93,7 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
         partName,
         quantity,
         unitCost,
+        part_status,
         notes,
       });
     }
@@ -112,6 +114,7 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
       quantity: c.quantity,
       unitCost: c.unitCost,
       totalCost: (c as any).totalCost,
+      part_status: (c as any).part_status,
       notes: (c as any).notes,
       addedAt: (c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt || new Date().toISOString())),
     }));
@@ -122,6 +125,45 @@ vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
     return res.status(201).json({ success: true, count: items.length, data: items });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to add parts' });
+  }
+});
+
+// DELETE /api/vendors/me/parts/:partId
+// Delete a part that was previously added by the authenticated vendor
+vendorsRouter.delete('/me/parts/:partId', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    const { partId } = req.params;
+    if (!mongoose.isValidObjectId(partId)) {
+      return res.status(400).json({ success: false, message: 'Invalid part id' });
+    }
+
+    // Find the part
+    const part = await PartModel.findById(partId).lean();
+    if (!part) return res.status(404).json({ success: false, message: 'Part not found' });
+
+    // Verify the part belongs to an assignment owned by this vendor
+    const assignment = await JobAssignmentModel.findById(part.assignmentId).lean();
+    if (!assignment) return res.status(404).json({ success: false, message: 'Associated assignment not found' });
+    if (String(assignment.vendorId) !== String(req.user.vendorId)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions to delete this part' });
+    }
+
+    // Delete the part
+    await PartModel.deleteOne({ _id: partId });
+
+    return res.json({ 
+      success: true, 
+      message: 'Part deleted successfully',
+      data: { 
+        id: String(part._id),
+        partNumber: part.partNumber,
+        partName: part.partName
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
   }
 });
 

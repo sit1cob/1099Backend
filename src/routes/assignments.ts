@@ -150,7 +150,7 @@ assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest,
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
     if (String(assignment.vendorId) !== String(req.user.vendorId)) return res.status(403).json({ success: false, message: 'Insufficient permissions' });
 
-    const { partNumber, partName, quantity, unitCost, notes } = req.body || {};
+    const { partNumber, partName, quantity, unitCost, part_status, notes } = req.body || {};
 
     const created = await PartModel.create({
       assignmentId: new mongoose.Types.ObjectId(assignmentId),
@@ -159,11 +159,12 @@ assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest,
       partName,
       quantity,
       unitCost,
+      part_status,
       notes,
       addedByUserId: req.user?.id && mongoose.isValidObjectId(String(req.user.id)) ? new mongoose.Types.ObjectId(String(req.user.id)) : undefined,
     });
 
-    return res.status(201).json({ success: true, data: { id: String(created._id), assignmentId, partNumber, partName, quantity, unitCost, totalCost: created.totalCost, addedAt: created.createdAt } });
+    return res.status(201).json({ success: true, data: { id: String(created._id), assignmentId, partNumber, partName, quantity, unitCost, totalCost: created.totalCost, part_status: (created as any).part_status, addedAt: created.createdAt } });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to add part' });
   }
@@ -184,5 +185,43 @@ assignmentsRouter.get('/:assignmentId/parts', async (req: AuthenticatedRequest, 
     return res.json({ success: true, data: parts });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to load parts' });
+  }
+});
+
+// DELETE /api/assignments/:assignmentId/parts/:partId
+// Delete a specific part from an assignment
+assignmentsRouter.delete('/:assignmentId/parts/:partId', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { assignmentId, partId } = req.params;
+    if (!mongoose.isValidObjectId(assignmentId)) return res.status(400).json({ success: false, message: 'Invalid assignmentId' });
+    if (!mongoose.isValidObjectId(partId)) return res.status(400).json({ success: false, message: 'Invalid partId' });
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    // Verify assignment belongs to vendor
+    const assignment = await JobAssignmentModel.findById(assignmentId).lean();
+    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (String(assignment.vendorId) !== String(req.user.vendorId)) return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+
+    // Find and verify part belongs to this assignment
+    const part = await PartModel.findById(partId).lean();
+    if (!part) return res.status(404).json({ success: false, message: 'Part not found' });
+    if (String(part.assignmentId) !== String(assignmentId)) {
+      return res.status(400).json({ success: false, message: 'Part does not belong to this assignment' });
+    }
+
+    // Delete the part
+    await PartModel.deleteOne({ _id: partId });
+
+    return res.json({ 
+      success: true, 
+      message: 'Part deleted successfully',
+      data: { 
+        id: String(part._id),
+        partNumber: part.partNumber,
+        partName: part.partName
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
   }
 });
