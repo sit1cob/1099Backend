@@ -22,6 +22,9 @@ const JobSchema = new Schema({
   productInfoUpdate: {
     productLine: { type: String },
     brand: { type: String },
+    modelNumber: { type: String },
+    serialNumber: { type: String },
+    issue: { type: String },
     imageUrl: { type: String },
   },
   customerType: { type: String, default: 'Residential' },

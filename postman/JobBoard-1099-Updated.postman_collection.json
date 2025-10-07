@@ -1,0 +1,538 @@
+{
+  "info": {
+    "name": "1099 Job Board - Updated",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "e6f1f2f0-1a2b-4f2b-9f20-9b4edc0d1abc",
+    "description": "Updated collection with part_status field and delete parts endpoints"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Vendor",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register-vendor",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register-vendor"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorName\": \"AIJ_Appliances\",\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"email\": \"aij@example.com\",\n  \"phone\": \"+14083481485\",\n  \"serviceAreas\": [\"60607\", \"60611\", \"60601\"],\n  \"appliances\": [\"Refrigerator\", \"Air Conditioner\"],\n  \"available\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"role\": \"registered_user\",\n  \"fcmToken\": \"{{fcmToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auth Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendors",
+      "item": [
+        {
+          "name": "Get My Vendor Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+12245660644\",\n  \"serviceAreas\": [\"60611\", \"60601\", \"60614\"],\n  \"appliances\": [\"Microwave Oven\", \"Refrigerator\"],\n  \"available\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Get My Assignments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "assignments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && Array.isArray(json.data) && json.data.length > 0) {",
+                  "  const first = json.data[0];",
+                  "  if (first.id) pm.collectionVariables.set('assignmentId', first.id);",
+                  "  if (first.jobId) pm.collectionVariables.set('jobId', first.jobId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Parts (with part_status)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignmentId\": \"{{assignmentId}}\",\n  \"partNumber\": \"WP2198202\",\n  \"partName\": \"Refrigerator Water Filter\",\n  \"quantity\": 1,\n  \"unitCost\": 45.99,\n  \"part_status\": \"ordered\",\n  \"notes\": \"Ordered from supplier\"\n}"
+            }
+          },
+          "description": "Add a part with part_status field. Valid values: 'ordered' or 'inHand'",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('partId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Multiple Parts (with part_status)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignmentId\": \"{{assignmentId}}\",\n  \"parts\": [\n    {\n      \"partNumber\": \"WP2198202\",\n      \"partName\": \"Refrigerator Water Filter\",\n      \"quantity\": 1,\n      \"unitCost\": 45.99,\n      \"part_status\": \"ordered\"\n    },\n    {\n      \"partNumber\": \"WP2188656\",\n      \"partName\": \"Defrost Heater\",\n      \"quantity\": 1,\n      \"unitCost\": 32.50,\n      \"part_status\": \"inHand\"\n    }\n  ]\n}"
+            }
+          },
+          "description": "Add multiple parts with part_status field"
+        },
+        {
+          "name": "Delete Part",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts", "{{partId}}"]
+            }
+          },
+          "description": "Delete a part by its ID. Only the vendor who owns the assignment can delete the part."
+        },
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "dashboard"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Available Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/available?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "available"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"soNumber\": \"10002010\",\n  \"customerName\": \"Harry Putt\",\n  \"customerAddress\": \"123 Main St\",\n  \"customerCity\": \"Chicago\",\n  \"customerState\": \"IL\",\n  \"customerZip\": \"60168\",\n  \"customerPhone\": \"+1-312-555-0188\",\n  \"customerEmail\": \"Harry@example.com\",\n  \"scheduledDate\": \"2025-10-01T10:00:00Z\",\n  \"scheduledTimeWindow\": \"8:00AM to 5PM\",\n  \"applianceType\": \"Refrigerator\",\n  \"manufacturerBrand\": \"Samsung\",\n  \"serviceDescription\": \"Not cooling\",\n  \"priority\": \"medium\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('jobId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Job by ID (with manufacturerBrand)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "{{jobId}}"]
+            }
+          },
+          "description": "Returns job details including manufacturerBrand field and parts with part_status"
+        },
+        {
+          "name": "Claim Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/{{jobId}}/claims",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "{{jobId}}", "claims"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorNotes\": \"I can handle this repair\",\n  \"action\": \"accept\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Product Info",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/{{jobId}}/product-info-update",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "{{jobId}}", "product-info-update"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productLine\": \"Free Standing Ice Maker\",\n  \"brand\": \"Kenmore\",\n  \"imageUrl\": \"https://sears-1099.s3.us-east-2.amazonaws.com/uploads/sample.jpg\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assignments",
+      "item": [
+        {
+          "name": "Get Assignment by ID (with parts)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            }
+          },
+          "description": "Returns assignment details including parts array with part_status field"
+        },
+        {
+          "name": "List My Assignments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments"]
+            }
+          }
+        },
+        {
+          "name": "Update Assignment - Arrived",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"arrived\",\n  \"actualArrival\": \"2024-03-20T08:15:00Z\",\n  \"notes\": \"Arrived at customer location\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Assignment - Completed",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\",\n  \"completedAt\": \"2024-03-20T11:00:00Z\",\n  \"completionNotes\": \"Replaced water filter and cleaned coils. Refrigerator cooling normally.\",\n  \"customerSignature\": \"base64_encoded_signature_image\",\n  \"laborHours\": 1.5,\n  \"totalPartsCost\": 45.99,\n  \"totalLaborCost\": 150.00,\n  \"totalCost\": 195.99\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Part to Assignment (with part_status)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "parts"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partNumber\": \"7990\",\n  \"partName\": \"Compressor\",\n  \"quantity\": 1,\n  \"unitCost\": 36,\n  \"part_status\": \"inHand\",\n  \"notes\": \"Part already in stock\"\n}"
+            }
+          },
+          "description": "Add a part to an assignment with part_status field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('partId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Assignment Parts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "parts"]
+            }
+          },
+          "description": "Get all parts for an assignment, including part_status field"
+        },
+        {
+          "name": "Delete Part from Assignment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/parts/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "parts", "{{partId}}"]
+            }
+          },
+          "description": "Delete a specific part from an assignment"
+        }
+      ]
+    },
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Upload Image to S3",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/uploads/image",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "uploads", "image"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://1099-app-93c69bc1721a38c3.elb.us-east-2.amazonaws.com" },
+    { "key": "accessToken", "value": "" },
+    { "key": "jobId", "value": "" },
+    { "key": "assignmentId", "value": "" },
+    { "key": "partId", "value": "" },
+    { "key": "fcmToken", "value": "" }
+  ]
+}

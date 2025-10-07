@@ -47,6 +47,9 @@ function mapToJobDTO(doc: any) {
     productInfoUpdate: {
       productLine: (doc.productInfoUpdate && doc.productInfoUpdate.productLine) || null,
       brand: (doc.productInfoUpdate && doc.productInfoUpdate.brand) || null,
+      modelNumber: (doc.productInfoUpdate && doc.productInfoUpdate.modelNumber) || null,
+      serialNumber: (doc.productInfoUpdate && doc.productInfoUpdate.serialNumber) || null,
+      issue: (doc.productInfoUpdate && doc.productInfoUpdate.issue) || null,
       imageUrl: (doc.productInfoUpdate && doc.productInfoUpdate.imageUrl) || null,
     },
   };
@@ -292,7 +295,7 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
 });
 
 // PATCH /api/jobs/:id/product-info-update
-// Allows the assigned vendor to update product details: productLine, brand, imageUrl
+// Allows the assigned vendor to update product details: productLine, brand, modelNumber, serialNumber, issue, imageUrl
 jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
@@ -307,14 +310,24 @@ jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, r
       return res.status(403).json({ success: false, message: 'You are not assigned to this job' });
     }
 
-    const { productLine, brand, imageUrl } = (req.body || {}) as { productLine?: string; brand?: string; imageUrl?: string };
-    if (productLine == null && brand == null && imageUrl == null) {
-      return res.status(400).json({ success: false, message: 'No fields to update. Provide productLine, brand, or imageUrl.' });
+    const { productLine, brand, modelNumber, serialNumber, issue, imageUrl } = (req.body || {}) as { 
+      productLine?: string; 
+      brand?: string; 
+      modelNumber?: string;
+      serialNumber?: string;
+      issue?: string;
+      imageUrl?: string 
+    };
+    if (productLine == null && brand == null && modelNumber == null && serialNumber == null && issue == null && imageUrl == null) {
+      return res.status(400).json({ success: false, message: 'No fields to update. Provide productLine, brand, modelNumber, serialNumber, issue, or imageUrl.' });
     }
 
     const set: any = {};
     if (typeof productLine === 'string') set['productInfoUpdate.productLine'] = productLine;
     if (typeof brand === 'string') set['productInfoUpdate.brand'] = brand;
+    if (typeof modelNumber === 'string') set['productInfoUpdate.modelNumber'] = modelNumber;
+    if (typeof serialNumber === 'string') set['productInfoUpdate.serialNumber'] = serialNumber;
+    if (typeof issue === 'string') set['productInfoUpdate.issue'] = issue;
     if (typeof imageUrl === 'string') set['productInfoUpdate.imageUrl'] = imageUrl;
 
     await JobModel.updateOne({ _id: id }, { $set: set });
