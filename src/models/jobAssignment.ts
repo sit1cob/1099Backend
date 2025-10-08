@@ -18,6 +18,14 @@ const JobAssignmentSchema = new Schema({
   totalLaborCost: { type: Number },
   totalCost: { type: Number },
   action: { type: String, enum: ['accept', 'decline', 'assigned'], default: 'assigned' },
+  // Customer Not Home tracking
+  customerNotHome: {
+    status: { type: Boolean, default: false },
+    reason: { type: String },
+    imageUrl: { type: String },
+    additionalNote: { type: String },
+    recordedAt: { type: Date },
+  },
 }, { timestamps: true });
 
 export const JobAssignmentModel = mongoose.models.JobAssignment || mongoose.model('JobAssignment', JobAssignmentSchema);

@@ -225,3 +225,67 @@ assignmentsRouter.delete('/:assignmentId/parts/:partId', async (req: Authenticat
     return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
   }
 });
+
+// PATCH /api/assignments/:assignmentId/customer-not-home
+// Update customer not home status with reason, image, and notes
+assignmentsRouter.patch('/:assignmentId/customer-not-home', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { assignmentId } = req.params;
+    if (!mongoose.isValidObjectId(assignmentId)) return res.status(400).json({ success: false, message: 'Invalid assignmentId' });
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    // Verify assignment belongs to vendor
+    const assignment = await JobAssignmentModel.findById(assignmentId);
+    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (String(assignment.vendorId) !== String(req.user.vendorId)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+
+    const { status, reason, imageUrl, additionalNote } = req.body || {};
+
+    // Validate that at least status is provided
+    if (status === undefined) {
+      return res.status(400).json({ success: false, message: 'status field is required' });
+    }
+
+    // Update customer not home object
+    assignment.customerNotHome = {
+      status: Boolean(status),
+      reason: reason || undefined,
+      imageUrl: imageUrl || undefined,
+      additionalNote: additionalNote || undefined,
+      recordedAt: status ? new Date() : undefined,
+    } as any;
+
+    await assignment.save();
+
+    // Also update job status if customer not home
+    if (status) {
+      try {
+        await JobModel.updateOne(
+          { _id: new mongoose.Types.ObjectId(String(assignment.jobId)) },
+          { $set: { status: 'customer_not_home' } }
+        );
+      } catch (jobUpdateErr) {
+        console.error('Failed to update job status:', jobUpdateErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Customer not home status updated successfully',
+      data: {
+        assignmentId: String(assignment._id),
+        customerNotHome: {
+          status: assignment.customerNotHome.status,
+          reason: assignment.customerNotHome.reason,
+          imageUrl: assignment.customerNotHome.imageUrl,
+          additionalNote: assignment.customerNotHome.additionalNote,
+          recordedAt: assignment.customerNotHome.recordedAt,
+        },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update customer not home status' });
+  }
+});
