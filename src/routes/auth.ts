@@ -4,10 +4,12 @@ import { VendorModel } from '../models/vendor';
 import { password } from '../utils/password';
 import { jwtService } from '../services/jwt';
 import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
+import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const authRouter = Router();
 
 // POST /api/auth/login
+// First call external API, then call MongoDB, cache and compare responses
 authRouter.post('/login', async (req, res) => {
   try {
     const { username, password: pwd, role, fcmToken } = req.body || {};
@@ -18,80 +20,241 @@ authRouter.post('/login', async (req, res) => {
     }
     if (!username || !pwd) return res.status(400).json({ success: false, message: 'username and password required' });
 
-    const user = await UserModel.findOne({ username }).lean();
-    if (!user || !user.passwordHash) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] Starting dual API call for user:', username);
+    console.log('[LOGIN] ========================================');
 
-    const ok = await password.compare(pwd, user.passwordHash);
-    if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-
-    if (user.isActive === false) return res.status(403).json({ success: false, message: 'User disabled' });
-
-    const payload = {
-      userId: String(user._id),
-      role: (role as string) || user.role || 'registered_user',
-      vendorId: user.vendorId ? String(user.vendorId) : undefined,
-      sessionId: `s_${Date.now()}`,
-    };
-
-    const accessToken = jwtService.signAccess(payload, '2h');
-    const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
-
-    // Persist session metadata and FCM token (if provided)
-    const $set: Record<string, any> = { lastLoginAt: new Date() };
-    const $addToSet: Record<string, any> = {};
-    if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
-      $set.lastFcmToken = fcmToken.trim();
-      $set.lastFcmAt = new Date();
-      $addToSet.fcmTokens = fcmToken.trim();
+    // STEP 1: Call external API first
+    console.log('[LOGIN] STEP 1: Calling EXTERNAL API...');
+    let externalResponse;
+    try {
+      externalResponse = await ExternalApiAdapter.login(username, pwd, role);
+      console.log('[LOGIN] ✓ External API call successful');
+    } catch (extErr: any) {
+      console.error('[LOGIN] ✗ External API call failed:', extErr.message);
+      // Continue to MongoDB even if external fails
     }
-    if (Object.keys($addToSet).length > 0) {
-      const result = await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
-      console.log('[LOGIN] fcmToken update result', { matched: (result as any).matchedCount, modified: (result as any).modifiedCount });
-    } else {
-      const result = await UserModel.updateOne({ _id: user._id }, { $set });
-      console.log('[LOGIN] profile update result', { matched: (result as any).matchedCount, modified: (result as any).modifiedCount });
+
+    // STEP 2: Call MongoDB/Local API
+    console.log('[LOGIN] STEP 2: Calling MONGODB/LOCAL API...');
+    let mongoResponse;
+    try {
+      const user = await UserModel.findOne({ username }).lean();
+      if (user && user.passwordHash) {
+        const ok = await password.compare(pwd, user.passwordHash);
+        if (ok && user.isActive !== false) {
+          const payload = {
+            userId: String(user._id),
+            role: (role as string) || user.role || 'registered_user',
+            vendorId: user.vendorId ? String(user.vendorId) : undefined,
+            sessionId: `s_${Date.now()}`,
+          };
+
+          const accessToken = jwtService.signAccess(payload, '2h');
+          const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
+
+          // Update FCM token if provided
+          const $set: Record<string, any> = { lastLoginAt: new Date() };
+          const $addToSet: Record<string, any> = {};
+          if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
+            $set.lastFcmToken = fcmToken.trim();
+            $set.lastFcmAt = new Date();
+            $addToSet.fcmTokens = fcmToken.trim();
+          }
+          if (Object.keys($addToSet).length > 0) {
+            await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+          } else {
+            await UserModel.updateOne({ _id: user._id }, { $set });
+          }
+
+          const freshUser = await UserModel.findById(user._id).lean();
+          let vendorName: string | undefined;
+          if (payload.vendorId) {
+            const vendor = await VendorModel.findById(payload.vendorId).lean();
+            vendorName = vendor?.name;
+          }
+
+          const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
+
+          mongoResponse = {
+            success: true,
+            data: {
+              accessToken,
+              refreshToken,
+              user: {
+                id: String(freshUser?._id || user._id),
+                username: freshUser?.username || user.username,
+                role: freshUser?.role || payload.role,
+                vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
+                vendorName,
+                email: freshUser?.email,
+                permissions,
+              },
+            },
+          };
+          console.log('[LOGIN] ✓ MongoDB/Local API call successful');
+        } else {
+          console.log('[LOGIN] ✗ MongoDB/Local API: Invalid credentials or user disabled');
+        }
+      } else {
+        console.log('[LOGIN] ✗ MongoDB/Local API: User not found');
+      }
+    } catch (mongoErr: any) {
+      console.error('[LOGIN] ✗ MongoDB/Local API call failed:', mongoErr.message);
     }
-    // Fetch back minimal fields to verify
-    const updated = await UserModel.findById(user._id).select('fcmTokens lastFcmToken lastFcmAt').lean();
-    console.log('[LOGIN] user fcm snapshot', {
-      tokensCount: (updated?.fcmTokens || []).length,
-      lastFcmToken: updated?.lastFcmToken ? String(updated.lastFcmToken).slice(0, 8) + '…' : null,
-      lastFcmAt: updated?.lastFcmAt || null,
-    });
 
-    // Fetch latest user doc after updates to return fresh data
-    const freshUser = await UserModel.findById(user._id).lean();
-    let vendorName: string | undefined;
-    if (payload.vendorId) {
-      const vendor = await VendorModel.findById(payload.vendorId).lean();
-      vendorName = vendor?.name;
+    // STEP 3: Compare and log both responses
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] COMPARISON:');
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] External API Response:', externalResponse ? 'SUCCESS' : 'FAILED');
+    console.log('[LOGIN] MongoDB API Response:', mongoResponse ? 'SUCCESS' : 'FAILED');
+    
+    if (externalResponse) {
+      console.log('[LOGIN] External Response:', JSON.stringify(externalResponse, null, 2));
     }
-    console.log('[LOGIN] fresh user', freshUser);
+    if (mongoResponse) {
+      console.log('[LOGIN] MongoDB Response:', JSON.stringify(mongoResponse, null, 2));
+    }
+    console.log('[LOGIN] ========================================');
 
-    const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
+    // STEP 4: Return external response (or MongoDB as fallback)
+    const finalResponse = externalResponse || mongoResponse;
+    
+    if (!finalResponse) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
 
-    return res.json({
-      success: true,
-      data: {
-        accessToken,
-        refreshToken,
-        user: {
-          id: String(freshUser?._id || user._id),
-          username: freshUser?.username || user.username,
-          role: freshUser?.role || payload.role,
-          vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
-          vendorName,
-          email: freshUser?.email,
-          lastFcmToken: freshUser?.lastFcmToken || updated?.lastFcmToken,
-          lastFcmAt: freshUser?.lastFcmAt || updated?.lastFcmAt,
-          fcmTokensCount: Array.isArray(freshUser?.fcmTokens) ? freshUser!.fcmTokens.length : (Array.isArray(updated?.fcmTokens) ? updated!.fcmTokens.length : 0),
-          permissions,
-        },
-      },
-    });
+    console.log('[LOGIN] Returning response from:', externalResponse ? 'EXTERNAL API' : 'MONGODB API');
+    return res.json(finalResponse);
   } catch (err: any) {
-    console.error('[LOGIN]', err);
+    console.error('[LOGIN] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Login failed' });
+  }
+});
+
+// POST /api/auth/login-external
+// First call external API, then call MongoDB, cache and compare responses
+authRouter.post('/login-external', async (req, res) => {
+  try {
+    const { username, password: pwd, role, fcmToken } = req.body || {};
+    if (!username || !pwd) {
+      return res.status(400).json({ success: false, message: 'username and password required' });
+    }
+
+    console.log('[LOGIN-EXTERNAL] ========================================');
+    console.log('[LOGIN-EXTERNAL] Starting dual API call for user:', username);
+    console.log('[LOGIN-EXTERNAL] ========================================');
+
+    // STEP 1: Call external API first
+    console.log('[LOGIN-EXTERNAL] STEP 1: Calling EXTERNAL API...');
+    let externalResponse;
+    try {
+      externalResponse = await ExternalApiAdapter.login(username, pwd, role);
+      console.log('[LOGIN-EXTERNAL] ✓ External API call successful');
+    } catch (extErr: any) {
+      console.error('[LOGIN-EXTERNAL] ✗ External API call failed:', extErr.message);
+      // Continue to MongoDB even if external fails
+    }
+
+    // STEP 2: Call MongoDB/Local API
+    console.log('[LOGIN-EXTERNAL] STEP 2: Calling MONGODB/LOCAL API...');
+    let mongoResponse;
+    try {
+      const user = await UserModel.findOne({ username }).lean();
+      if (user && user.passwordHash) {
+        const ok = await password.compare(pwd, user.passwordHash);
+        if (ok && user.isActive !== false) {
+          const payload = {
+            userId: String(user._id),
+            role: (role as string) || user.role || 'registered_user',
+            vendorId: user.vendorId ? String(user.vendorId) : undefined,
+            sessionId: `s_${Date.now()}`,
+          };
+
+          const accessToken = jwtService.signAccess(payload, '2h');
+          const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
+
+          // Update FCM token if provided
+          const $set: Record<string, any> = { lastLoginAt: new Date() };
+          const $addToSet: Record<string, any> = {};
+          if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
+            $set.lastFcmToken = fcmToken.trim();
+            $set.lastFcmAt = new Date();
+            $addToSet.fcmTokens = fcmToken.trim();
+          }
+          if (Object.keys($addToSet).length > 0) {
+            await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+          } else {
+            await UserModel.updateOne({ _id: user._id }, { $set });
+          }
+
+          const freshUser = await UserModel.findById(user._id).lean();
+          let vendorName: string | undefined;
+          if (payload.vendorId) {
+            const vendor = await VendorModel.findById(payload.vendorId).lean();
+            vendorName = vendor?.name;
+          }
+
+          const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
+
+          mongoResponse = {
+            success: true,
+            data: {
+              accessToken,
+              refreshToken,
+              user: {
+                id: String(freshUser?._id || user._id),
+                username: freshUser?.username || user.username,
+                role: freshUser?.role || payload.role,
+                vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
+                vendorName,
+                email: freshUser?.email,
+                permissions,
+              },
+            },
+          };
+          console.log('[LOGIN-EXTERNAL] ✓ MongoDB/Local API call successful');
+        } else {
+          console.log('[LOGIN-EXTERNAL] ✗ MongoDB/Local API: Invalid credentials or user disabled');
+        }
+      } else {
+        console.log('[LOGIN-EXTERNAL] ✗ MongoDB/Local API: User not found');
+      }
+    } catch (mongoErr: any) {
+      console.error('[LOGIN-EXTERNAL] ✗ MongoDB/Local API call failed:', mongoErr.message);
+    }
+
+    // STEP 3: Compare and log both responses
+    console.log('[LOGIN-EXTERNAL] ========================================');
+    console.log('[LOGIN-EXTERNAL] COMPARISON:');
+    console.log('[LOGIN-EXTERNAL] ========================================');
+    console.log('[LOGIN-EXTERNAL] External API Response:', externalResponse ? 'SUCCESS' : 'FAILED');
+    console.log('[LOGIN-EXTERNAL] MongoDB API Response:', mongoResponse ? 'SUCCESS' : 'FAILED');
+    
+    if (externalResponse) {
+      console.log('[LOGIN-EXTERNAL] External Response:', JSON.stringify(externalResponse, null, 2));
+    }
+    if (mongoResponse) {
+      console.log('[LOGIN-EXTERNAL] MongoDB Response:', JSON.stringify(mongoResponse, null, 2));
+    }
+    console.log('[LOGIN-EXTERNAL] ========================================');
+
+    // STEP 4: Return external response (or MongoDB as fallback)
+    const finalResponse = externalResponse || mongoResponse;
+    
+    if (!finalResponse) {
+      return res.status(401).json({ success: false, message: 'Both APIs failed' });
+    }
+
+    console.log('[LOGIN-EXTERNAL] Returning response from:', externalResponse ? 'EXTERNAL API' : 'MONGODB API');
+    return res.json(finalResponse);
+  } catch (err: any) {
+    console.error('[LOGIN-EXTERNAL] Unexpected error:', err.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: err?.message || 'Login failed' 
+    });
   }
 });
 
