@@ -512,6 +512,26 @@
           "description": "Delete a specific part from an assignment"
         },
         {
+          "name": "Reschedule Assignment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "schedule"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newScheduledDate\": \"2024-03-22\",\n  \"newTimeWindow\": \"1PM-5PM\",\n  \"rescheduleReason\": \"Parts not available\",\n  \"vendorNotes\": \"Need to order specific part\"\n}"
+            }
+          },
+          "description": "Request to reschedule an assignment. Updates the job's scheduled date and time window, and adds reschedule notes to the assignment."
+        },
+        {
           "name": "Update Customer Not Home",
           "request": {
             "method": "PATCH",

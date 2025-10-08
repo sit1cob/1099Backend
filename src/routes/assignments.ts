@@ -331,6 +331,81 @@ assignmentsRouter.delete('/:assignmentId/parts/:partId', async (req: Authenticat
   }
 });
 
+// PUT /api/assignments/:id/schedule
+// Request to reschedule an assignment
+assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid assignment id' });
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    const assignment = await JobAssignmentModel.findById(id);
+    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (String(assignment.vendorId) !== String(req.user.vendorId)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+
+    const { newScheduledDate, newTimeWindow, rescheduleReason, vendorNotes } = req.body || {};
+
+    // Validate required fields
+    if (!newScheduledDate) {
+      return res.status(400).json({ success: false, message: 'newScheduledDate is required' });
+    }
+
+    // Update the related job's scheduled date and time window
+    try {
+      const updateData: any = {
+        scheduledDate: new Date(newScheduledDate),
+      };
+      
+      if (newTimeWindow) {
+        updateData.scheduledTimeWindow = newTimeWindow;
+      }
+
+      await JobModel.updateOne(
+        { _id: new mongoose.Types.ObjectId(String(assignment.jobId)) },
+        { $set: updateData }
+      );
+    } catch (jobUpdateErr) {
+      console.error('Failed to update job schedule:', jobUpdateErr);
+      return res.status(500).json({ success: false, message: 'Failed to update job schedule' });
+    }
+
+    // Update assignment notes with reschedule information
+    const rescheduleNote = `Rescheduled to ${newScheduledDate}${newTimeWindow ? ` (${newTimeWindow})` : ''}. Reason: ${rescheduleReason || 'Not specified'}`;
+    const updatedNotes = assignment.notes 
+      ? `${assignment.notes}\n${rescheduleNote}` 
+      : rescheduleNote;
+
+    assignment.notes = updatedNotes;
+    
+    if (vendorNotes) {
+      assignment.vendorNotes = vendorNotes;
+    }
+
+    await assignment.save();
+
+    // Fetch updated job details
+    const updatedJob = await JobModel.findById(assignment.jobId).lean();
+
+    return res.json({
+      success: true,
+      message: 'Assignment rescheduled successfully',
+      data: {
+        assignmentId: String(assignment._id),
+        jobId: String(assignment.jobId),
+        newScheduledDate: updatedJob?.scheduledDate,
+        newTimeWindow: updatedJob?.scheduledTimeWindow,
+        rescheduleReason: rescheduleReason || null,
+        notes: assignment.notes,
+        vendorNotes: assignment.vendorNotes,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to reschedule assignment' });
+  }
+});
+
 // PATCH /api/assignments/:assignmentId/customer-not-home
 // Update customer not home status with reason, image, and notes
 assignmentsRouter.patch('/:assignmentId/customer-not-home', async (req: AuthenticatedRequest, res) => {
