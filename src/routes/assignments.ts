@@ -62,6 +62,111 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// GET /api/assignments/:id/details
+// Comprehensive assignment details with all related information
+assignmentsRouter.get('/:id/details', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid assignment id' });
+    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    const assignment = await JobAssignmentModel.findById(id).lean();
+    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (String(assignment.vendorId) !== String(req.user.vendorId)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+
+    // Fetch job details
+    const jobDoc = await getJobDoc(new mongoose.Types.ObjectId(assignment.jobId));
+    
+    // Fetch parts
+    const parts = await PartModel.find({ assignmentId: new mongoose.Types.ObjectId(id) })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Format response with all details
+    const response = {
+      assignment: {
+        id: String(assignment._id),
+        jobId: String(assignment.jobId),
+        vendorId: String(assignment.vendorId),
+        status: assignment.status,
+        assignedAt: assignment.assignedAt,
+        confirmedAt: assignment.confirmedAt,
+        arrivedAt: assignment.arrivedAt,
+        completedAt: assignment.completedAt,
+        completionNotes: assignment.completionNotes,
+        vendorNotes: assignment.vendorNotes,
+        notes: assignment.notes,
+        customerSignature: assignment.customerSignature,
+        laborHours: assignment.laborHours,
+        totalPartsCost: assignment.totalPartsCost,
+        totalLaborCost: assignment.totalLaborCost,
+        totalCost: assignment.totalCost,
+        action: assignment.action,
+        customerNotHome: assignment.customerNotHome || {
+          status: false,
+          reason: null,
+          imageUrl: null,
+          additionalNote: null,
+          recordedAt: null,
+        },
+        createdAt: assignment.createdAt,
+        updatedAt: assignment.updatedAt,
+      },
+      job: jobDoc ? {
+        id: String(jobDoc._id),
+        soNumber: jobDoc.soNumber,
+        customerName: jobDoc.customerName,
+        customerAddress: jobDoc.customerAddress,
+        customerCity: jobDoc.customerCity,
+        customerState: jobDoc.customerState,
+        customerZip: jobDoc.customerZip,
+        customerPhone: jobDoc.customerPhone,
+        customerAltPhone: jobDoc.customerAltPhone,
+        customerEmail: jobDoc.customerEmail,
+        scheduledDate: jobDoc.scheduledDate,
+        scheduledTimeWindow: jobDoc.scheduledTimeWindow,
+        applianceType: jobDoc.applianceType,
+        applianceCode: jobDoc.applianceCode,
+        manufacturerBrand: jobDoc.manufacturerBrand,
+        serviceDescription: jobDoc.serviceDescription,
+        productInfoUpdate: jobDoc.productInfoUpdate || {
+          productLine: null,
+          brand: null,
+          modelNumber: null,
+          serialNumber: null,
+          issue: null,
+          imageUrl: null,
+        },
+        status: jobDoc.status,
+        priority: jobDoc.priority,
+      } : null,
+      parts: parts.map((part: any) => ({
+        id: String(part._id),
+        partNumber: part.partNumber,
+        partName: part.partName,
+        quantity: part.quantity,
+        unitCost: part.unitCost,
+        totalCost: part.totalCost,
+        part_status: part.part_status,
+        notes: part.notes,
+        createdAt: part.createdAt,
+        updatedAt: part.updatedAt,
+      })),
+      summary: {
+        totalParts: parts.length,
+        totalPartsCost: parts.reduce((sum: number, p: any) => sum + (p.totalCost || 0), 0),
+        hasCustomerNotHome: assignment.customerNotHome?.status || false,
+      },
+    };
+
+    return res.json({ success: true, data: response });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignment details' });
+  }
+});
+
 // Shared handler to update/complete an assignment
 async function updateAssignment(req: AuthenticatedRequest, res: any) {
   try {

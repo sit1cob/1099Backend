@@ -341,7 +341,7 @@
           }
         },
         {
-          "name": "Update Product Info",
+          "name": "Update Product Info (with model, serial, issue)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -355,9 +355,10 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productLine\": \"Free Standing Ice Maker\",\n  \"brand\": \"Kenmore\",\n  \"imageUrl\": \"https://sears-1099.s3.us-east-2.amazonaws.com/uploads/sample.jpg\"\n}"
+              "raw": "{\n  \"productLine\": \"Refrigerator\",\n  \"brand\": \"GE\",\n  \"modelNumber\": \"GTS18GTHWW\",\n  \"serialNumber\": \"SN123456789\",\n  \"issue\": \"Not cooling properly\",\n  \"imageUrl\": \"https://sears-1099.s3.us-east-2.amazonaws.com/uploads/sample.jpg\"\n}"
             }
-          }
+          },
+          "description": "Update product information including productLine, brand, modelNumber, serialNumber, issue, and imageUrl"
         }
       ]
     },
@@ -378,6 +379,21 @@
             }
           },
           "description": "Returns assignment details including parts array with part_status field"
+        },
+        {
+          "name": "Get Assignment Details (Comprehensive)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "details"]
+            }
+          },
+          "description": "Returns comprehensive assignment details including: assignment info, full job details, all parts with part_status, customer not home data, and summary totals"
         },
         {
           "name": "List My Assignments",
@@ -494,6 +510,26 @@
             }
           },
           "description": "Delete a specific part from an assignment"
+        },
+        {
+          "name": "Update Customer Not Home",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/customer-not-home",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "customer-not-home"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": true,\n  \"reason\": \"Not Available\",\n  \"imageUrl\": \"https://sears-1099.s3.us-east-2.amazonaws.com/uploads/2025/10/08/door-photo.jpg\",\n  \"additionalNote\": \"Left notice on door, will attempt contact via phone\"\n}"
+            }
+          },
+          "description": "Record customer not home status with reason, door photo, and additional notes. Automatically updates job status to 'customer_not_home'."
         }
       ]
     },
