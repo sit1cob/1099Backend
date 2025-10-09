@@ -352,10 +352,11 @@ assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) =>
       return res.status(400).json({ success: false, message: 'newScheduledDate is required' });
     }
 
-    // Update the related job's scheduled date and time window
+    // Update the related job's scheduled date, time window, and status
     try {
       const updateData: any = {
         scheduledDate: new Date(newScheduledDate),
+        status: 'rescheduled',
       };
       
       if (newTimeWindow) {
@@ -366,6 +367,8 @@ assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) =>
         { _id: new mongoose.Types.ObjectId(String(assignment.jobId)) },
         { $set: updateData }
       );
+      
+      console.log('[RESCHEDULE] Job status updated to "rescheduled"');
     } catch (jobUpdateErr) {
       console.error('Failed to update job schedule:', jobUpdateErr);
       return res.status(500).json({ success: false, message: 'Failed to update job schedule' });
