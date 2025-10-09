@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { ExternalApiCacheModel } from '../models/externalApiCache';
 
-//const EXTERNAL_API_BASE_URL = 'https://48d99eca-33b7-4a28-9c21-b6eaa571ad6b-00-2397wpudnvwvi.picard.replit.dev';
-const EXTERNAL_API_BASE_URL = 'https://shs-1099-job-board.replit.app';
+const EXTERNAL_API_BASE_URL = 'https://48d99eca-33b7-4a28-9c21-b6eaa571ad6b-00-2397wpudnvwvi.picard.replit.dev';
+//const EXTERNAL_API_BASE_URL = 'https://shs-1099-job-board.replit.app';
 
 
 export class ExternalApiAdapter {
