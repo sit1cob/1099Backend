@@ -231,11 +231,11 @@ assignmentsRouter.post('/:id', async (req: AuthenticatedRequest, res) => {
     }
 
     try {
-      // Call external API using POST (some external APIs accept POST for updates)
+      // Call external API using PATCH (external API requires PATCH, not POST)
       const externalResponse = await ExternalApiAdapter.callExternalApi(
         `/api/assignments/${id}`,
         token,
-        'POST',
+        'PATCH',
         req.body
       );
       
