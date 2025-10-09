@@ -5,8 +5,151 @@ import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
 import { OrderModel } from '../models/order';
 import { PartModel } from '../models/part';
+import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const assignmentsRouter = Router();
+
+// GET /api/assignments/:id - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    console.log('[AssignmentDetails] ========================================');
+    console.log('[AssignmentDetails] Calling EXTERNAL API for assignment:', id);
+    console.log('[AssignmentDetails] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(`/api/assignments/${id}`, token, 'GET');
+      
+      console.log('[AssignmentDetails] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AssignmentDetails] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AssignmentDetails] ================================================');
+      console.log('[AssignmentDetails] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AssignmentDetails] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AssignmentDetails] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignment details' });
+  }
+});
+
+// PATCH /api/assignments/:id - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.patch('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    console.log('[UpdateAssignment] ========================================');
+    console.log('[UpdateAssignment] Calling EXTERNAL API for assignment:', id);
+    console.log('[UpdateAssignment] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[UpdateAssignment] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${id}`,
+        token,
+        'PATCH',
+        req.body
+      );
+      
+      console.log('[UpdateAssignment] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[UpdateAssignment] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[UpdateAssignment] ================================================');
+      console.log('[UpdateAssignment] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[UpdateAssignment] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[UpdateAssignment] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
+  }
+});
+
+// POST /api/assignments/:assignmentId/parts - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { assignmentId } = req.params;
+    console.log('[AddPart] ========================================');
+    console.log('[AddPart] Calling EXTERNAL API for assignment:', assignmentId);
+    console.log('[AddPart] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[AddPart] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${assignmentId}/parts`,
+        token,
+        'POST',
+        req.body
+      );
+      
+      console.log('[AddPart] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AddPart] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AddPart] ================================================');
+      console.log('[AddPart] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AddPart] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AddPart] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to add part' });
+  }
+});
+
 assignmentsRouter.use(authenticateJWT());
 
 // Helper to fetch job-like doc (Job or Order)
@@ -37,28 +180,6 @@ assignmentsRouter.get('/', async (req: AuthenticatedRequest, res) => {
     return res.json({ success: true, data: assignments, count: assignments.length });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignments' });
-  }
-});
-
-// GET /api/assignments/:id
-assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid assignment id' });
-    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
-
-    const assignment = await JobAssignmentModel.findById(id).lean();
-    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
-    if (String(assignment.vendorId) !== String(req.user.vendorId)) {
-      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
-    }
-
-    const jobDoc = await getJobDoc(new mongoose.Types.ObjectId(assignment.jobId));
-    const parts = await PartModel.find({ assignmentId: new mongoose.Types.ObjectId(id) }).lean();
-
-    return res.json({ success: true, data: { ...assignment, job: jobDoc, parts, photos: [] } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignment' });
   }
 });
 
@@ -238,42 +359,8 @@ async function updateAssignment(req: AuthenticatedRequest, res: any) {
   }
 }
 
-// PATCH /api/assignments/:id
-assignmentsRouter.patch('/:id', updateAssignment);
-
-// POST /api/assignments/:id (alias for update/complete)
+// POST /api/assignments/:id (alias for update/complete - MongoDB only)
 assignmentsRouter.post('/:id', updateAssignment);
-
-// POST /api/assignments/:assignmentId/parts
-assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { assignmentId } = req.params;
-    if (!mongoose.isValidObjectId(assignmentId)) return res.status(400).json({ success: false, message: 'Invalid assignmentId' });
-    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
-
-    const assignment = await JobAssignmentModel.findById(assignmentId).lean();
-    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
-    if (String(assignment.vendorId) !== String(req.user.vendorId)) return res.status(403).json({ success: false, message: 'Insufficient permissions' });
-
-    const { partNumber, partName, quantity, unitCost, part_status, notes } = req.body || {};
-
-    const created = await PartModel.create({
-      assignmentId: new mongoose.Types.ObjectId(assignmentId),
-      jobId: new mongoose.Types.ObjectId(assignment.jobId),
-      partNumber,
-      partName,
-      quantity,
-      unitCost,
-      part_status,
-      notes,
-      addedByUserId: req.user?.id && mongoose.isValidObjectId(String(req.user.id)) ? new mongoose.Types.ObjectId(String(req.user.id)) : undefined,
-    });
-
-    return res.status(201).json({ success: true, data: { id: String(created._id), assignmentId, partNumber, partName, quantity, unitCost, totalCost: created.totalCost, part_status: (created as any).part_status, addedAt: created.createdAt } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to add part' });
-  }
-});
 
 // GET /api/assignments/:assignmentId/parts
 assignmentsRouter.get('/:assignmentId/parts', async (req: AuthenticatedRequest, res) => {

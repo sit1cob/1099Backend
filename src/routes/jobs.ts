@@ -8,10 +8,9 @@ import { UserModel } from '../models/user';
 import { sendMulticast, chunk } from '../services/fcm';
 import mongoose from 'mongoose';
 import { PartModel } from '../models/part';
+import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const jobsRouter = Router();
-
-jobsRouter.use(authenticateJWT());
 
 // Helper to map an order/job doc to the DTO used by clients
 function mapToJobDTO(doc: any) {
@@ -56,83 +55,146 @@ function mapToJobDTO(doc: any) {
 }
 
 // GET /api/jobs/available
-// For now: return all jobs with pagination and optional filters. Later we can scope by vendor.
+// Call external API first, fallback to MongoDB if needed
 jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
   try {
-    // Read query params
-    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || '20'), 10)));
-    const city = (req.query.city as string | undefined)?.trim();
-    const applianceType = (req.query.applianceType as string | undefined)?.trim();
+    console.log('[JobsAvailable] ========================================');
+    console.log('[JobsAvailable] Calling EXTERNAL API...');
+    console.log('[JobsAvailable] ========================================');
 
-    const filter: Record<string, any> = {};
-    // Only list truly available jobs
-    filter.status = /^available$/i;
-    if (city) filter.customerCity = new RegExp(`^${city}$`, 'i');
-    if (applianceType) filter.applianceType = new RegExp(`^${applianceType}$`, 'i');
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
 
-    // Exclude jobs this vendor has previously declined and scope by vendor's serviceAreas/appliances
-    if (req.user?.vendorId) {
-      const [declined, vendor] = await Promise.all([
-        JobAssignmentModel.find({ vendorId: req.user.vendorId, status: 'declined' })
-          .select('jobId')
-          .lean(),
-        VendorModel.findById(req.user.vendorId).lean(),
-      ]);
-
-      const declinedJobIds = declined.map((d: any) => d.jobId).filter(Boolean);
-      if (declinedJobIds.length > 0) {
-        filter._id = { $nin: declinedJobIds };
-      }
-
-      if (vendor) {
-        const serviceAreas = ((vendor as any).serviceAreas || (vendor as any).zipCodes || [])
-          .map((z: any) => String(z).trim())
-          .filter(Boolean);
-        const appliances = ((vendor as any).appliances || [])
-          .map((a: any) => String(a).trim())
-          .filter(Boolean);
-        if (serviceAreas.length > 0) {
-          filter.customerZip = { $in: serviceAreas };
-        }
-        if (appliances.length > 0) {
-          filter.applianceType = { $in: appliances };
-        }
-        // Debug: print applied scoping (remove in production)
-        console.log('[JobsAvailable] vendor scope', {
-          vendorId: String(req.user.vendorId),
-          serviceAreas,
-          appliances,
-          filter,
-        });
-      } else {
-        // If user claims to be a vendor but vendor record is missing, default to no jobs
-        console.warn('[JobsAvailable] vendorId present but vendor not found', { vendorId: String(req.user.vendorId) });
-        return res.json({ success: true, data: { jobs: [], pagination: { page, pageSize, total: 0, totalPages: 1 } } });
-      }
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
     }
 
-    const total = await JobModel.countDocuments(filter);
-    const docs = await JobModel.find(filter)
-      .sort({ scheduledDate: -1, createdAt: -1 })
-      .skip((page - 1) * pageSize)
-      .limit(pageSize)
-      .lean();
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/jobs/available', token, 'GET');
+      
+      console.log('[JobsAvailable] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[JobsAvailable] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[JobsAvailable] ================================================');
+      console.log('[JobsAvailable] ✓ Returning external API response (success or failure)');
 
-    const jobs = docs.map(mapToJobDTO);
-    const totalPages = Math.ceil(total / pageSize) || 1;
-
-    return res.json({
-      success: true,
-      data: {
-        jobs,
-        pagination: { page, pageSize, total, totalPages },
-      },
-    });
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[JobsAvailable] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
   } catch (err: any) {
+    console.error('[JobsAvailable] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch available jobs' });
   }
 });
+
+// GET /api/jobs/:id
+// Call external API first, fallback to MongoDB if needed
+jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    console.log('[JobDetails] ========================================')
+    console.log('[JobDetails] Calling EXTERNAL API for job:', id);
+    console.log('[JobDetails] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(`/api/jobs/${id}`, token, 'GET');
+      
+      console.log('[JobDetails] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[JobDetails] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[JobDetails] ================================================');
+      console.log('[JobDetails] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[JobDetails] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[JobDetails] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch job details' });
+  }
+});
+
+// POST /api/jobs/:id/claims - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('[ClaimJob] ========================================');
+    console.log('[ClaimJob] Attempting to claim job:', id);
+    console.log('[ClaimJob] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    // Try external API first if token exists
+    if (token) {
+      try {
+        console.log('[ClaimJob] Calling EXTERNAL API...');
+        const externalResponse = await ExternalApiAdapter.callExternalApi(
+          `/api/jobs/${id}/claims`,
+          token,
+          'POST',
+          req.body
+        );
+        
+        console.log('[ClaimJob] ========== EXTERNAL API RESPONSE ==========');
+        console.log('[ClaimJob] Response:', JSON.stringify(externalResponse, null, 2));
+        console.log('[ClaimJob] ================================================');
+        console.log('[ClaimJob] ✓ Returning external API response (success or failure)');
+
+        // Always return external API response (even if failed)
+        const statusCode = externalResponse.success ? 201 : (externalResponse.data?.rescheduleResult ? 200 : 400);
+        return res.status(statusCode).json(externalResponse);
+      } catch (extErr: any) {
+        console.error('[ClaimJob] ✗ External API call failed:', extErr.message);
+        
+        // Return the error from external API
+        return res.status(500).json({ 
+          success: false, 
+          message: extErr.message || 'External API call failed' 
+        });
+      }
+    }
+
+    // MongoDB fallback - requires authentication
+    return res.status(401).json({ 
+      success: false, 
+      message: 'No token provided. MongoDB fallback requires authentication.' 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to claim job' });
+  }
+});
+
+// Apply authentication middleware to all routes below this point
+jobsRouter.use(authenticateJWT());
 
 // POST /api/jobs
 // Create a new job (use this to trigger creation logs locally). Auth required.
@@ -261,39 +323,6 @@ jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to create job' });
   }
 });
-// GET /api/jobs/:id
-jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid job id' });
-
-    let doc = await JobModel.findById(id).lean();
-    if (!doc) {
-      const order = await OrderModel.findById(id).lean();
-      if (order) doc = order as any;
-    }
-    if (!doc) return res.status(404).json({ success: false, message: 'Job not found' });
-
-    // Fetch parts linked to this job id
-    const parts = await PartModel.find({ jobId: new mongoose.Types.ObjectId(id) }).sort({ createdAt: -1 }).lean();
-
-    // Ensure we return assignmentId even if not stored on job yet
-    let assignmentId: string | null = (doc as any).assignmentId ? String((doc as any).assignmentId) : null;
-    if (!assignmentId) {
-      const latest = await JobAssignmentModel.findOne({ jobId: new mongoose.Types.ObjectId(id) })
-        .sort({ assignedAt: -1, createdAt: -1 })
-        .select('_id')
-        .lean();
-      assignmentId = latest ? String(latest._id) : null;
-    }
-
-    const dto = { ...mapToJobDTO(doc), assignmentId } as any;
-    return res.json({ success: true, data: { ...dto, parts } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch job' });
-  }
-});
-
 // PATCH /api/jobs/:id/product-info-update
 // Allows the assigned vendor to update product details: productLine, brand, modelNumber, serialNumber, issue, imageUrl
 jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, res) => {
@@ -338,112 +367,3 @@ jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, r
   }
 });
 
-// POST /api/jobs/:id/claims
-// Creates a job assignment for the authenticated vendor
-jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid job id' });
-
-    const jobObjectId = new mongoose.Types.ObjectId(id);
-
-    // Ensure the job exists either in jobs or orders (legacy)
-    const job = await JobModel.findById(jobObjectId).lean();
-    const order = job ? null : await OrderModel.findById(jobObjectId).lean();
-    if (!job && !order) return res.status(404).json({ success: false, message: 'Job not found' });
-
-    const { vendorNotes, action } = (req.body || {}) as { vendorNotes?: string; action?: string };
-    const normalizedAction = (action || 'accept').toLowerCase();
-    if (!['accept', 'decline'].includes(normalizedAction)) {
-      return res.status(400).json({ success: false, message: "action must be 'accept' or 'decline'" });
-    }
-
-    // Prevent duplicate claim by same vendor; if exists, treat as idempotent and ensure job/order reflects assignment
-    const existing = await JobAssignmentModel.findOne({ jobId: jobObjectId, vendorId: req.user.vendorId }).lean();
-    if (existing) {
-      // Reflect user's current action on the Job/Order
-      if (job) {
-        if (normalizedAction === 'accept') {
-          await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: existing._id } });
-        } else {
-          // decline -> make it available again and clear vendor
-          await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } });
-        }
-      } else if (order) {
-        try {
-          if (normalizedAction === 'accept') {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: existing._id } as any });
-          } else {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } } as any);
-          }
-        } catch {
-          if (normalizedAction === 'accept') {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, assignmentId: existing._id } as any });
-          } else {
-            await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '', assignmentId: '' } } as any);
-          }
-        }
-      }
-      return res.status(200).json({
-        success: true,
-        message: normalizedAction === 'accept' ? 'Job already claimed by this vendor' : 'Job was previously claimed; updated to declined',
-        data: {
-          assignmentId: String(existing._id),
-          jobId: String(existing.jobId),
-          vendorId: String(existing.vendorId),
-          status: normalizedAction === 'accept' ? 'assigned' : 'declined',
-          claimedAt: new Date(existing.assignedAt || existing.createdAt || Date.now()).toISOString(),
-        },
-      });
-    }
-
-    const payload: any = {
-      jobId: jobObjectId,
-      vendorId: req.user.vendorId,
-      status: normalizedAction === 'accept' ? 'assigned' : 'declined',
-      vendorNotes,
-      action: normalizedAction,
-    };
-    const assignment = await JobAssignmentModel.create(payload);
-
-    // Reflect claim/decline on the Job/Order document
-    if (job) {
-      if (normalizedAction === 'accept') {
-        await JobModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: assignment._id } });
-      } else {
-        await JobModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } });
-      }
-    } else if (order) {
-      // Legacy path: reflect on orders collection
-      try {
-        if (normalizedAction === 'accept') {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, status: 'assigned', assignmentId: assignment._id } as any });
-        } else {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { status: 'available' }, $unset: { vendorId: '', assignmentId: '' } } as any);
-        }
-      } catch {
-        // Some legacy orders may not have a status field
-        if (normalizedAction === 'accept') {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $set: { vendorId: req.user.vendorId, assignmentId: assignment._id } as any });
-        } else {
-          await OrderModel.updateOne({ _id: jobObjectId }, { $unset: { vendorId: '', assignmentId: '' } } as any);
-        }
-      }
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: normalizedAction === 'accept' ? 'Job successfully claimed' : 'Job declined',
-      data: {
-        assignmentId: String(assignment._id),
-        jobId: String(assignment.jobId),
-        vendorId: String(assignment.vendorId),
-        status: assignment.status,
-        claimedAt: assignment.assignedAt?.toISOString?.() || new Date().toISOString(),
-      },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to claim job' });
-  }
-});

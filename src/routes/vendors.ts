@@ -6,10 +6,95 @@ import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
 import { PartModel } from '../models/part';
 import mongoose from 'mongoose';
+import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const vendorsRouter = Router();
 
-// Require auth for all vendor routes
+// GET /api/vendors/me/jobs - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorJobs] ========================================');
+    console.log('[VendorJobs] Calling EXTERNAL API...');
+    console.log('[VendorJobs] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/vendors/me/jobs', token, 'GET');
+      
+      console.log('[VendorJobs] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[VendorJobs] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[VendorJobs] ================================================');
+      console.log('[VendorJobs] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[VendorJobs] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorJobs] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor jobs' });
+  }
+});
+
+// GET /api/vendors/me/assignments - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorAssignments] ========================================');
+    console.log('[VendorAssignments] Calling EXTERNAL API...');
+    console.log('[VendorAssignments] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/vendors/me/assignments', token, 'GET');
+      
+      console.log('[VendorAssignments] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[VendorAssignments] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[VendorAssignments] ================================================');
+      console.log('[VendorAssignments] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[VendorAssignments] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorAssignments] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor assignments' });
+  }
+});
+
+// Require auth for all vendor routes BELOW this point
 vendorsRouter.use(authenticateJWT());
 
 // GET /api/vendors/me
@@ -239,103 +324,6 @@ function mapToJobDTO(doc: any) {
     status: doc.status || 'available',
   };
 }
-
-// GET /api/vendors/me/jobs
-// Returns jobs for this vendor (same shape as /api/jobs/available), with pagination
-vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
-    const vendor = await VendorModel.findById(req.user.vendorId).lean();
-    if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
-
-    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || '20'), 10)));
-
-    // Prefer jobs collection filtered by vendorId and assigned status
-    const filter: any = { vendorId: req.user.vendorId, status: /^assigned$/i };
-    let total = await JobModel.countDocuments(filter);
-    let docs = await JobModel.find(filter)
-      .sort({ scheduledDate: -1, createdAt: -1 })
-      .skip((page - 1) * pageSize)
-      .limit(pageSize)
-      .lean();
-
-    // Fallback to legacy orders if no jobs
-    if (total === 0) {
-      // Legacy: try vendorId first if present on orders, else fallback to vendorName
-      const orderFilter: any = { $or: [ { vendorId: req.user.vendorId }, { vendorName: vendor.name } ] };
-      total = await OrderModel.countDocuments(orderFilter);
-      docs = await OrderModel.find(orderFilter)
-        .sort({ scheduledDate: -1, createdAt: -1 })
-        .skip((page - 1) * pageSize)
-        .limit(pageSize)
-        .lean() as any[];
-    }
-
-    const jobs = (docs as any[]).map(mapToJobDTO);
-    const totalPages = Math.ceil(total / pageSize) || 1;
-
-    return res.json({
-      success: true,
-      data: {
-        jobs,
-        pagination: { page, pageSize, total, totalPages },
-      },
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor jobs' });
-  }
-});
-
-// GET /api/vendors/me/assignments
-vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user?.vendorId) return res.status(400).json({ success: false, message: 'User is not linked to a vendor' });
-
-    const assignments = await JobAssignmentModel.find({ vendorId: req.user.vendorId })
-      .sort({ assignedAt: -1, createdAt: -1 })
-      .lean();
-
-    // Gather related job/order docs to enrich each assignment with customer/job info
-    const jobIds = Array.from(new Set(assignments.map((a: any) => String(a.jobId)).filter(Boolean)));
-    const objIds = jobIds.filter((id) => mongoose.isValidObjectId(id)).map((id) => new mongoose.Types.ObjectId(id));
-
-    const [jobs, orders] = await Promise.all([
-      JobModel.find({ _id: { $in: objIds } }).lean(),
-      OrderModel.find({ _id: { $in: objIds } }).lean(),
-    ]);
-
-    const jobMap = new Map<string, any>();
-    for (const j of jobs as any[]) jobMap.set(String(j._id), j);
-    for (const o of orders as any[]) if (!jobMap.has(String(o._id))) jobMap.set(String(o._id), o);
-
-    const enriched = assignments.map((a: any) => {
-      const j = jobMap.get(String(a.jobId)) || {};
-      const soNumber = j.soNumber || j.raw?.SO_NO || `SO-${String(a.jobId || a._id).slice(-6)}`;
-      const custName = j.customerName || j.raw?.CUS_NM || null;
-      const addressParts = [j.customerAddress, j.customerCity, j.customerState, j.customerZip].filter(Boolean);
-      const address = addressParts.length ? addressParts.join(', ') : null;
-      return {
-        id: String(a._id),
-        jobId: String(a.jobId),
-        vendorId: String(a.vendorId),
-        status: a.status,
-        assignedAt: a.assignedAt || a.createdAt || null,
-        arrivedAt: a.arrivedAt || null,
-        completedAt: a.completedAt || null,
-        notes: a.notes || null,
-        // Extra fields from job details
-        customerName: custName,
-        soNumber,
-        address,
-      };
-    });
-
-    return res.json({ success: true, data: enriched, count: enriched.length });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch assignments' });
-  }
-});
 
 // GET /api/vendors/me/dashboard
 // Returns KPI-style metrics for the vendor dashboard
