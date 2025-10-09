@@ -211,6 +211,68 @@ assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest,
   }
 });
 
+// Helper function for reschedule assignment
+async function handleRescheduleAssignment(req: AuthenticatedRequest, res: any, method: 'PUT' | 'POST') {
+  try {
+    const { id } = req.params;
+    console.log(`[RescheduleAssignment-${method}] ========================================`);
+    console.log(`[RescheduleAssignment-${method}] Calling EXTERNAL API for assignment:`, id);
+    console.log(`[RescheduleAssignment-${method}] Body:`, JSON.stringify(req.body, null, 2));
+    console.log(`[RescheduleAssignment-${method}] ========================================`);
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API with the same method
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${id}/schedule`,
+        token,
+        method,
+        req.body
+      );
+      
+      console.log(`[RescheduleAssignment-${method}] ========== EXTERNAL API RESPONSE ==========`);
+      console.log(`[RescheduleAssignment-${method}] Response:`, JSON.stringify(externalResponse, null, 2));
+      console.log(`[RescheduleAssignment-${method}] ================================================`);
+      console.log(`[RescheduleAssignment-${method}] ✓ Returning external API response`);
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error(`[RescheduleAssignment-${method}] ✗ External API call failed:`, extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error(`[RescheduleAssignment-${method}] Unexpected error:`, err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to reschedule assignment' });
+  }
+}
+
+// PUT /api/assignments/:id/schedule - NO AUTH (proxies to external API)
+// Reschedule assignment endpoint (primary method)
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) => {
+  return handleRescheduleAssignment(req, res, 'PUT');
+});
+
+// POST /api/assignments/:id/schedule - NO AUTH (proxies to external API)
+// Reschedule assignment endpoint (alternative method)
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.post('/:id/schedule', async (req: AuthenticatedRequest, res) => {
+  return handleRescheduleAssignment(req, res, 'POST');
+});
+
 // POST /api/assignments/:id - NO AUTH (proxies to external API)
 // This is an alias for PATCH - Android app uses POST instead of PATCH
 // This must be defined BEFORE the authenticateJWT() middleware
