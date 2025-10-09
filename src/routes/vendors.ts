@@ -124,7 +124,10 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
       console.log('[VendorDashboard] ================================================');
 
       // Calculate statistics
-      const availableJobs = availableJobsResponse?.data?.jobs || availableJobsResponse?.data || [];
+      // Extract jobs array - check if data is already an array, otherwise look for data.jobs
+      const availableJobs = Array.isArray(availableJobsResponse?.data) 
+        ? availableJobsResponse.data 
+        : (availableJobsResponse?.data?.jobs || []);
       const assignments = assignmentsResponse?.data || [];
       
       const availableJobsCount = Array.isArray(availableJobs) ? availableJobs.length : 0;
@@ -132,6 +135,11 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
       const completedCount = Array.isArray(assignments) 
         ? assignments.filter((a: any) => a.status === 'completed').length 
         : 0;
+      
+      console.log('[VendorDashboard] Calculated Statistics:');
+      console.log('[VendorDashboard]   Available Jobs Count:', availableJobsCount);
+      console.log('[VendorDashboard]   My Jobs Count:', myJobsCount);
+      console.log('[VendorDashboard]   Completed Count:', completedCount);
 
       const dashboardData = {
         success: true,
