@@ -8,6 +8,47 @@ import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const authRouter = Router();
 
+// GET /api/auth/status - NO AUTH (proxies to external API)
+authRouter.get('/status', async (req, res) => {
+  try {
+    console.log('[AuthStatus] ========================================');
+    console.log('[AuthStatus] Calling EXTERNAL API...');
+    console.log('[AuthStatus] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/auth/status', token, 'GET');
+      
+      console.log('[AuthStatus] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AuthStatus] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AuthStatus] ================================================');
+      console.log('[AuthStatus] ✓ Returning external API response');
+
+      // Return external API response as-is
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AuthStatus] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(401).json({ 
+        success: false, 
+        message: extErr.message || 'Invalid or expired token' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AuthStatus] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to check auth status' });
+  }
+});
+
 // POST /api/auth/login
 // First call external API, then call MongoDB, cache and compare responses
 authRouter.post('/login', async (req, res) => {
