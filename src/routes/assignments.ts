@@ -211,6 +211,56 @@ assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest,
   }
 });
 
+// POST /api/assignments/:id - NO AUTH (proxies to external API)
+// This is an alias for PATCH - Android app uses POST instead of PATCH
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.post('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    console.log('[UpdateAssignment-POST] ========================================');
+    console.log('[UpdateAssignment-POST] Calling EXTERNAL API for assignment:', id);
+    console.log('[UpdateAssignment-POST] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[UpdateAssignment-POST] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API using POST (some external APIs accept POST for updates)
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${id}`,
+        token,
+        'POST',
+        req.body
+      );
+      
+      console.log('[UpdateAssignment-POST] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[UpdateAssignment-POST] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[UpdateAssignment-POST] ================================================');
+      console.log('[UpdateAssignment-POST] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[UpdateAssignment-POST] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[UpdateAssignment-POST] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
+  }
+});
+
 assignmentsRouter.use(authenticateJWT());
 
 // Helper to fetch job-like doc (Job or Order)
@@ -419,56 +469,6 @@ async function updateAssignment(req: AuthenticatedRequest, res: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
   }
 }
-
-// POST /api/assignments/:id - NO AUTH (proxies to external API)
-// This is an alias for PATCH - Android app uses POST instead of PATCH
-// This must be defined BEFORE the authenticateJWT() middleware
-assignmentsRouter.post('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    console.log('[UpdateAssignment-POST] ========================================');
-    console.log('[UpdateAssignment-POST] Calling EXTERNAL API for assignment:', id);
-    console.log('[UpdateAssignment-POST] Body:', JSON.stringify(req.body, null, 2));
-    console.log('[UpdateAssignment-POST] ========================================');
-
-    // Get the token from request headers
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
-
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'No token provided' });
-    }
-
-    try {
-      // Call external API using POST (some external APIs accept POST for updates)
-      const externalResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/assignments/${id}`,
-        token,
-        'POST',
-        req.body
-      );
-      
-      console.log('[UpdateAssignment-POST] ========== EXTERNAL API RESPONSE ==========');
-      console.log('[UpdateAssignment-POST] Response:', JSON.stringify(externalResponse, null, 2));
-      console.log('[UpdateAssignment-POST] ================================================');
-      console.log('[UpdateAssignment-POST] ✓ Returning external API response (success or failure)');
-
-      // Always return external API response (even if failed)
-      return res.json(externalResponse);
-    } catch (extErr: any) {
-      console.error('[UpdateAssignment-POST] ✗ External API call failed:', extErr.message);
-      
-      // Return the error from external API
-      return res.status(500).json({ 
-        success: false, 
-        message: extErr.message || 'External API call failed' 
-      });
-    }
-  } catch (err: any) {
-    console.error('[UpdateAssignment-POST] Unexpected error:', err);
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
-  }
-});
 
 // GET /api/assignments/:assignmentId/parts
 assignmentsRouter.get('/:assignmentId/parts', async (req: AuthenticatedRequest, res) => {
