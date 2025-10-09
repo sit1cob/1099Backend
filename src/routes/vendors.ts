@@ -94,6 +94,80 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// GET /api/vendors/me/dashboard - NO AUTH (proxies to external API)
+// Get dashboard statistics (available jobs, my jobs, completed)
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorDashboard] ========================================');
+    console.log('[VendorDashboard] Calling EXTERNAL API...');
+    console.log('[VendorDashboard] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API to get all necessary data
+      const [availableJobsResponse, assignmentsResponse] = await Promise.all([
+        ExternalApiAdapter.callExternalApi('/api/vendors/me/jobs', token, 'GET'),
+        ExternalApiAdapter.callExternalApi('/api/vendors/me/assignments', token, 'GET')
+      ]);
+      
+      console.log('[VendorDashboard] ========== EXTERNAL API RESPONSES ==========');
+      console.log('[VendorDashboard] Available Jobs Response:', JSON.stringify(availableJobsResponse, null, 2));
+      console.log('[VendorDashboard] Assignments Response:', JSON.stringify(assignmentsResponse, null, 2));
+      console.log('[VendorDashboard] ================================================');
+
+      // Calculate statistics
+      const availableJobs = availableJobsResponse?.data?.jobs || availableJobsResponse?.data || [];
+      const assignments = assignmentsResponse?.data || [];
+      
+      const availableJobsCount = Array.isArray(availableJobs) ? availableJobs.length : 0;
+      const myJobsCount = Array.isArray(assignments) ? assignments.length : 0;
+      const completedCount = Array.isArray(assignments) 
+        ? assignments.filter((a: any) => a.status === 'completed').length 
+        : 0;
+
+      const dashboardData = {
+        success: true,
+        data: {
+          availableJobs: availableJobsCount,
+          myJobs: myJobsCount,
+          completed: completedCount,
+          statistics: {
+            availableJobsCount,
+            myJobsCount,
+            completedCount,
+            inProgressCount: Array.isArray(assignments) 
+              ? assignments.filter((a: any) => ['assigned', 'arrived', 'in_progress'].includes(a.status)).length 
+              : 0
+          }
+        }
+      };
+
+      console.log('[VendorDashboard] ✓ Returning dashboard statistics:', JSON.stringify(dashboardData, null, 2));
+
+      return res.json(dashboardData);
+    } catch (extErr: any) {
+      console.error('[VendorDashboard] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorDashboard] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch dashboard data' });
+  }
+});
+
 // POST /api/vendors/me/parts - NO AUTH (proxies to external API)
 // This must be defined BEFORE the authenticateJWT() middleware
 vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
