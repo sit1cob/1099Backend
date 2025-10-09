@@ -27,16 +27,77 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     }
 
     try {
-      // Call external API
+      // STEP 1: Call external API to get assignment
       const externalResponse = await ExternalApiAdapter.callExternalApi(`/api/assignments/${id}`, token, 'GET');
       
       console.log('[AssignmentDetails] ========== EXTERNAL API RESPONSE ==========');
       console.log('[AssignmentDetails] Response:', JSON.stringify(externalResponse, null, 2));
       console.log('[AssignmentDetails] ================================================');
-      console.log('[AssignmentDetails] ✓ Returning external API response (success or failure)');
 
-      // Always return external API response (even if failed)
-      return res.json(externalResponse);
+      if (!externalResponse.success || !externalResponse.data) {
+        console.log('[AssignmentDetails] ✓ Returning external API response (failed)');
+        return res.json(externalResponse);
+      }
+
+      const assignment = externalResponse.data;
+
+      // STEP 2: Fetch job details from external API
+      let jobDetails = null;
+      if (assignment.jobId) {
+        try {
+          console.log('[AssignmentDetails] Fetching job details for jobId:', assignment.jobId);
+          const jobResponse = await ExternalApiAdapter.callExternalApi(`/api/jobs/${assignment.jobId}`, token, 'GET');
+          if (jobResponse.success && jobResponse.data) {
+            jobDetails = jobResponse.data;
+            console.log('[AssignmentDetails] ✓ Job details fetched successfully');
+          }
+        } catch (jobErr: any) {
+          console.error('[AssignmentDetails] ✗ Failed to fetch job details:', jobErr.message);
+        }
+      }
+
+      // STEP 3: Fetch parts from external API (if endpoint exists)
+      let parts = [];
+      try {
+        console.log('[AssignmentDetails] Fetching parts for assignment:', id);
+        const partsResponse = await ExternalApiAdapter.callExternalApi(`/api/assignments/${id}/parts`, token, 'GET');
+        if (partsResponse.success && Array.isArray(partsResponse.data)) {
+          parts = partsResponse.data;
+          console.log('[AssignmentDetails] ✓ Parts fetched:', parts.length);
+        }
+      } catch (partsErr: any) {
+        console.log('[AssignmentDetails] ℹ No parts found or endpoint not available');
+      }
+
+      // STEP 4: Transform response to match MongoDB format
+      const enrichedResponse = {
+        success: true,
+        data: {
+          _id: String(assignment.id),
+          jobId: String(assignment.jobId),
+          vendorId: String(assignment.vendorId),
+          status: assignment.status,
+          vendorNotes: assignment.vendorNotes || null,
+          action: assignment.action || null,
+          customerNotHome: assignment.customerNotHome || { status: false },
+          assignedAt: assignment.assignedAt,
+          createdAt: assignment.createdAt || assignment.assignedAt,
+          updatedAt: assignment.updatedAt || new Date().toISOString(),
+          __v: 0,
+          confirmedAt: assignment.confirmedAt || null,
+          arrivedAt: assignment.arrivedAt || null,
+          completedAt: assignment.completedAt || null,
+          completionNotes: assignment.completionNotes || null,
+          notes: assignment.notes || null,
+          cancellationReason: assignment.cancellationReason || null,
+          ...(jobDetails && { job: jobDetails }),
+          parts: parts,
+          photos: assignment.photos || [],
+        }
+      };
+
+      console.log('[AssignmentDetails] ✓ Returning enriched response with job details');
+      return res.json(enrichedResponse);
     } catch (extErr: any) {
       console.error('[AssignmentDetails] ✗ External API call failed:', extErr.message);
       
