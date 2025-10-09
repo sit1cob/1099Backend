@@ -86,8 +86,9 @@ export class ExternalApiAdapter {
    * Call external API with token
    */
   static async callExternalApi(endpoint: string, token: string, method: string = 'GET', data?: any) {
+    const url = `${EXTERNAL_API_BASE_URL}${endpoint}`;
+    
     try {
-      const url = `${EXTERNAL_API_BASE_URL}${endpoint}`;
       const config: any = {
         method,
         url,
@@ -105,7 +106,26 @@ export class ExternalApiAdapter {
       const response = await axios(config);
       return response.data;
     } catch (error: any) {
-      console.error('[ExternalApiAdapter] API call failed:', error.message);
+      console.error('[ExternalApiAdapter] ========== EXTERNAL API CALL FAILED ==========');
+      console.error('[ExternalApiAdapter] Failed Request Details:');
+      console.error('[ExternalApiAdapter]   Method:', method);
+      console.error('[ExternalApiAdapter]   Endpoint:', endpoint);
+      console.error('[ExternalApiAdapter]   Full URL:', url);
+      console.error('[ExternalApiAdapter]   Token (first 20 chars):', token.substring(0, 20) + '...');
+      if (data) {
+        console.error('[ExternalApiAdapter]   Request Body:', JSON.stringify(data, null, 2));
+      }
+      console.error('[ExternalApiAdapter] Error Details:');
+      console.error('[ExternalApiAdapter]   Error Message:', error.message);
+      if (error.response) {
+        console.error('[ExternalApiAdapter]   HTTP Status:', error.response.status);
+        console.error('[ExternalApiAdapter]   Status Text:', error.response.statusText);
+        console.error('[ExternalApiAdapter]   Response Data:', JSON.stringify(error.response.data, null, 2));
+      } else if (error.request) {
+        console.error('[ExternalApiAdapter]   No response received from server');
+        console.error('[ExternalApiAdapter]   Request timeout or network error');
+      }
+      console.error('[ExternalApiAdapter] ================================================');
       throw new Error(error.response?.data?.message || 'External API call failed');
     }
   }
