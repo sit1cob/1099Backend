@@ -49,6 +49,39 @@ authRouter.get('/status', async (req, res) => {
   }
 });
 
+// POST /api/auth/refresh - NO AUTH (proxies to external API)
+authRouter.post('/refresh', async (req, res) => {
+  try {
+    console.log('[AuthRefresh] ========================================');
+    console.log('[AuthRefresh] Calling EXTERNAL API...');
+    console.log('[AuthRefresh] ========================================');
+
+    try {
+      // Call external API (no token needed for refresh)
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/auth/refresh', '', 'POST', req.body);
+      
+      console.log('[AuthRefresh] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AuthRefresh] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AuthRefresh] ================================================');
+      console.log('[AuthRefresh] ✓ Returning external API response');
+
+      // Return external API response as-is
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AuthRefresh] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(401).json({ 
+        success: false, 
+        message: extErr.message || 'Token refresh failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AuthRefresh] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to refresh token' });
+  }
+});
+
 // POST /api/auth/login
 // First call external API, then call MongoDB, cache and compare responses
 authRouter.post('/login', async (req, res) => {

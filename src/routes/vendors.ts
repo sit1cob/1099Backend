@@ -94,6 +94,54 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// POST /api/vendors/me/parts - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorParts] ========================================');
+    console.log('[VendorParts] Calling EXTERNAL API...');
+    console.log('[VendorParts] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[VendorParts] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        '/api/vendors/me/parts',
+        token,
+        'POST',
+        req.body
+      );
+      
+      console.log('[VendorParts] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[VendorParts] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[VendorParts] ================================================');
+      console.log('[VendorParts] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[VendorParts] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorParts] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to add parts' });
+  }
+});
+
 // Require auth for all vendor routes BELOW this point
 vendorsRouter.use(authenticateJWT());
 
