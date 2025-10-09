@@ -8,18 +8,21 @@ export class ExternalApiAdapter {
    * Call external login API and cache the response
    */
   static async login(username: string, password: string, role?: string) {
+    const url = `${EXTERNAL_API_BASE_URL}/api/auth/login`;
+    
     try {
       const requestData = { username, password, role: role || 'registered_user' };
       
       console.log('[ExternalApiAdapter] ========== EXTERNAL API REQUEST ==========');
-      console.log('[ExternalApiAdapter] URL:', `${EXTERNAL_API_BASE_URL}/api/auth/login`);
+      console.log('[ExternalApiAdapter] URL:', url);
       console.log('[ExternalApiAdapter] Method: POST');
       console.log('[ExternalApiAdapter] Request Body:', JSON.stringify(requestData, null, 2));
+      console.log('[ExternalApiAdapter] Timeout: 30000ms (30 seconds)');
       
-      // Call external API
-      const response = await axios.post(`${EXTERNAL_API_BASE_URL}/api/auth/login`, requestData, {
+      // Call external API with increased timeout
+      const response = await axios.post(url, requestData, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 10000,
+        timeout: 30000, // Increased from 10s to 30s
       });
 
       console.log('[ExternalApiAdapter] ========== EXTERNAL API RESPONSE ==========');
@@ -51,14 +54,30 @@ export class ExternalApiAdapter {
       // Return the external response as-is
       return externalResponse;
     } catch (error: any) {
-      console.error('[ExternalApiAdapter] ========== EXTERNAL API ERROR ==========');
-      console.error('[ExternalApiAdapter] Error Message:', error.message);
+      console.error('[ExternalApiAdapter] ========== EXTERNAL API LOGIN FAILED ==========');
+      console.error('[ExternalApiAdapter] Failed Request Details:');
+      console.error('[ExternalApiAdapter]   Method: POST');
+      console.error('[ExternalApiAdapter]   Endpoint: /api/auth/login');
+      console.error('[ExternalApiAdapter]   Full URL:', url);
+      console.error('[ExternalApiAdapter]   Username:', username);
+      console.error('[ExternalApiAdapter] Error Details:');
+      console.error('[ExternalApiAdapter]   Error Message:', error.message);
+      console.error('[ExternalApiAdapter]   Error Code:', error.code);
       if (error.response) {
-        console.error('[ExternalApiAdapter] Error Status:', error.response.status);
-        console.error('[ExternalApiAdapter] Error Response:', JSON.stringify(error.response.data, null, 2));
+        console.error('[ExternalApiAdapter]   HTTP Status:', error.response.status);
+        console.error('[ExternalApiAdapter]   Status Text:', error.response.statusText);
+        console.error('[ExternalApiAdapter]   Response Data:', JSON.stringify(error.response.data, null, 2));
+      } else if (error.request) {
+        console.error('[ExternalApiAdapter]   No response received from server');
+        console.error('[ExternalApiAdapter]   Possible causes: Network error, timeout, or server unreachable');
+        console.error('[ExternalApiAdapter]   Request config:', JSON.stringify({
+          url: error.config?.url,
+          method: error.config?.method,
+          timeout: error.config?.timeout,
+        }, null, 2));
       }
       console.error('[ExternalApiAdapter] ================================================');
-      throw new Error(error.response?.data?.message || 'External API login failed');
+      throw new Error(error.response?.data?.message || error.message || 'External API login failed');
     }
   }
 
