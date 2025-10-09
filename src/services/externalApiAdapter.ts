@@ -115,7 +115,7 @@ export class ExternalApiAdapter {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        timeout: 10000,
+        timeout: 30000, // Increased from 10s to 30s to handle slow Replit server
       };
 
       if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
