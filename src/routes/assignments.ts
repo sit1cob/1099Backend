@@ -217,7 +217,7 @@ async function handleRescheduleAssignment(req: AuthenticatedRequest, res: any, m
     const { id } = req.params;
     console.log(`[RescheduleAssignment-${method}] ========================================`);
     console.log(`[RescheduleAssignment-${method}] Calling EXTERNAL API for assignment:`, id);
-    console.log(`[RescheduleAssignment-${method}] Body:`, JSON.stringify(req.body, null, 2));
+    console.log(`[RescheduleAssignment-${method}] Original Body:`, JSON.stringify(req.body, null, 2));
     console.log(`[RescheduleAssignment-${method}] ========================================`);
 
     // Get the token from request headers
@@ -228,13 +228,29 @@ async function handleRescheduleAssignment(req: AuthenticatedRequest, res: any, m
       return res.status(401).json({ success: false, message: 'No token provided' });
     }
 
+    // Transform request body to match external API expectations
+    // Android sends: rescheduleReason, vendorNotes, newTimeWindow
+    // External API expects: reason, notes, newScheduledDate
+    const transformedBody: any = {
+      newScheduledDate: req.body.newScheduledDate,
+      reason: req.body.rescheduleReason || req.body.reason || 'vendor_requested',
+      notes: req.body.vendorNotes || req.body.notes || ''
+    };
+
+    // Include newTimeWindow if provided (optional)
+    if (req.body.newTimeWindow) {
+      transformedBody.newTimeWindow = req.body.newTimeWindow;
+    }
+
+    console.log(`[RescheduleAssignment-${method}] Transformed Body:`, JSON.stringify(transformedBody, null, 2));
+
     try {
-      // Call external API with the same method
+      // Call external API with the same method and transformed body
       const externalResponse = await ExternalApiAdapter.callExternalApi(
         `/api/assignments/${id}/schedule`,
         token,
         method,
-        req.body
+        transformedBody
       );
       
       console.log(`[RescheduleAssignment-${method}] ========== EXTERNAL API RESPONSE ==========`);
