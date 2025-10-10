@@ -1,32 +1,53 @@
 import { Router } from 'express';
-import mongoose from 'mongoose';
-import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
-import { PartModel } from '../models/part';
-import { JobAssignmentModel } from '../models/jobAssignment';
+import type { Request } from 'express';
+import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const partsRouter = Router();
-partsRouter.use(authenticateJWT());
 
-// DELETE /api/parts/:id
-partsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
+// DELETE /api/parts/:id - NO AUTH (proxies to external API)
+// Remove a part from the list
+partsRouter.delete('/:id', async (req: Request, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid part id' });
-    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
+    
+    console.log('[DeletePart] ========================================');
+    console.log('[DeletePart] Deleting part:', id);
+    console.log('[DeletePart] ========================================');
 
-    const part = await PartModel.findById(id).lean();
-    if (!part) return res.status(404).json({ success: false, message: 'Part not found' });
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
 
-    // Ensure the part belongs to an assignment of this vendor
-    const assignment = await JobAssignmentModel.findById((part as any).assignmentId).lean();
-    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment for this part not found' });
-    if (String((assignment as any).vendorId) !== String(req.user.vendorId)) {
-      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
     }
 
-    await PartModel.deleteOne({ _id: new mongoose.Types.ObjectId(id) });
-    return res.json({ success: true, message: 'Part deleted' });
+    try {
+      // Call external API to delete the part
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/parts/${id}`,
+        token,
+        'DELETE'
+      );
+      
+      console.log('[DeletePart] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[DeletePart] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[DeletePart] ================================================');
+      console.log('[DeletePart] ✓ Returning external API response');
+
+      // Return external API response
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[DeletePart] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
   } catch (err: any) {
+    console.error('[DeletePart] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
   }
 });
