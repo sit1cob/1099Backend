@@ -8,7 +8,7 @@ import { UserModel } from '../models/user';
 import { sendMulticast, chunk } from '../services/fcm';
 import mongoose from 'mongoose';
 import { PartModel } from '../models/part';
-import { ExternalApiAdapter } from '../services/externalApiAdapter';
+import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
 
 export const jobsRouter = Router();
 
@@ -121,7 +121,7 @@ function mapToJobDTO(doc: any) {
 jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
   try {
     console.log('[JobsAvailable] ========================================');
-    console.log('[JobsAvailable] Calling EXTERNAL API...');
+    console.log('[JobsAvailable] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/jobs/available`);
     console.log('[JobsAvailable] ========================================');
 
     // Get the token from request headers
@@ -164,7 +164,7 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[JobDetails] ========================================')
-    console.log('[JobDetails] Calling EXTERNAL API for job:', id);
+    console.log('[JobDetails] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/jobs/${id}`);
     console.log('[JobDetails] ========================================');
 
     // Get the token from request headers
@@ -239,7 +239,7 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
     // Try external API first if token exists
     if (token) {
       try {
-        console.log('[ClaimJob] Calling EXTERNAL API...');
+        console.log('[ClaimJob] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/jobs/${id}/claims`);
         const externalResponse = await ExternalApiAdapter.callExternalApi(
           `/api/jobs/${id}/claims`,
           token,

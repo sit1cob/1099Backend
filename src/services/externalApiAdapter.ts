@@ -4,6 +4,8 @@ import { ExternalApiCacheModel } from '../models/externalApiCache';
 //const EXTERNAL_API_BASE_URL = 'https://48d99eca-33b7-4a28-9c21-b6eaa571ad6b-00-2397wpudnvwvi.picard.replit.dev';
 const EXTERNAL_API_BASE_URL = 'https://shs-1099-job-board.replit.app';
 
+// Export the base URL so routes can use it in logs
+export const EXTERNAL_API_URL = EXTERNAL_API_BASE_URL;
 
 export class ExternalApiAdapter {
   /**
