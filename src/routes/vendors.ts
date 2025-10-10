@@ -6,7 +6,7 @@ import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
 import { PartModel } from '../models/part';
 import mongoose from 'mongoose';
-import { ExternalApiAdapter } from '../services/externalApiAdapter';
+import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
 
 export const vendorsRouter = Router();
 
@@ -15,7 +15,7 @@ export const vendorsRouter = Router();
 vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
   try {
     console.log('[VendorProfile] ========================================');
-    console.log('[VendorProfile] Calling EXTERNAL API...');
+    console.log('[VendorProfile] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me`);
     console.log('[VendorProfile] ========================================');
 
     // Get the token from request headers
@@ -57,7 +57,7 @@ vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
 vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
   try {
     console.log('[VendorJobs] ========================================');
-    console.log('[VendorJobs] Calling EXTERNAL API...');
+    console.log('[VendorJobs] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/jobs`);
     console.log('[VendorJobs] ========================================');
 
     // Get the token from request headers
@@ -99,7 +99,7 @@ vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
 vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
   try {
     console.log('[VendorAssignments] ========================================');
-    console.log('[VendorAssignments] Calling EXTERNAL API...');
+    console.log('[VendorAssignments] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/assignments`);
     console.log('[VendorAssignments] ========================================');
 
     // Get the token from request headers
@@ -142,7 +142,7 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
 vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
   try {
     console.log('[VendorDashboard] ========================================');
-    console.log('[VendorDashboard] Calling EXTERNAL API...');
+    console.log('[VendorDashboard] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/dashboard`);
     console.log('[VendorDashboard] ========================================');
 
     // Get the token from request headers
@@ -223,7 +223,7 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
 vendorsRouter.post('/me/parts', async (req: AuthenticatedRequest, res) => {
   try {
     console.log('[VendorParts] ========================================');
-    console.log('[VendorParts] Calling EXTERNAL API...');
+    console.log('[VendorParts] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/parts`);
     console.log('[VendorParts] Body:', JSON.stringify(req.body, null, 2));
     console.log('[VendorParts] ========================================');
 
@@ -274,7 +274,7 @@ vendorsRouter.delete('/me/parts/:partId', async (req: AuthenticatedRequest, res)
     const { partId } = req.params;
     
     console.log('[DeleteVendorPart] ========================================');
-    console.log('[DeleteVendorPart] Deleting part:', partId);
+    console.log('[DeleteVendorPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/parts/${partId}`);
     console.log('[DeleteVendorPart] ========================================');
 
     // Get the token from request headers

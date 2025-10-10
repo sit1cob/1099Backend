@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request } from 'express';
-import { ExternalApiAdapter } from '../services/externalApiAdapter';
+import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
 
 export const partsRouter = Router();
 
@@ -11,7 +11,7 @@ partsRouter.delete('/:id', async (req: Request, res) => {
     const { id } = req.params;
     
     console.log('[DeletePart] ========================================');
-    console.log('[DeletePart] Deleting part:', id);
+    console.log('[DeletePart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/parts/${id}`);
     console.log('[DeletePart] ========================================');
 
     // Get the token from request headers

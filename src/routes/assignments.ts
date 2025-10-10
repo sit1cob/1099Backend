@@ -5,7 +5,7 @@ import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
 import { OrderModel } from '../models/order';
 import { PartModel } from '../models/part';
-import { ExternalApiAdapter } from '../services/externalApiAdapter';
+import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
 
 export const assignmentsRouter = Router();
 
@@ -15,7 +15,7 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[AssignmentDetails] ========================================');
-    console.log('[AssignmentDetails] Calling EXTERNAL API for assignment:', id);
+    console.log('[AssignmentDetails] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${id}`);
     console.log('[AssignmentDetails] ========================================');
 
     // Get the token from request headers
@@ -119,7 +119,7 @@ assignmentsRouter.patch('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[UpdateAssignment] ========================================');
-    console.log('[UpdateAssignment] Calling EXTERNAL API for assignment:', id);
+    console.log('[UpdateAssignment] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${id}`);
     console.log('[UpdateAssignment] Body:', JSON.stringify(req.body, null, 2));
     console.log('[UpdateAssignment] ========================================');
 
@@ -168,7 +168,7 @@ assignmentsRouter.post('/:assignmentId/parts', async (req: AuthenticatedRequest,
   try {
     const { assignmentId } = req.params;
     console.log('[AddPart] ========================================');
-    console.log('[AddPart] Calling EXTERNAL API for assignment:', assignmentId);
+    console.log('[AddPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${assignmentId}/parts`);
     console.log('[AddPart] Body:', JSON.stringify(req.body, null, 2));
     console.log('[AddPart] ========================================');
 
@@ -216,7 +216,7 @@ async function handleRescheduleAssignment(req: AuthenticatedRequest, res: any, m
   try {
     const { id } = req.params;
     console.log(`[RescheduleAssignment-${method}] ========================================`);
-    console.log(`[RescheduleAssignment-${method}] Calling EXTERNAL API for assignment:`, id);
+    console.log(`[RescheduleAssignment-${method}] Calling EXTERNAL API:`, `${EXTERNAL_API_URL}/api/assignments/${id}/reschedule`);
     console.log(`[RescheduleAssignment-${method}] Original Body:`, JSON.stringify(req.body, null, 2));
     console.log(`[RescheduleAssignment-${method}] ========================================`);
 
@@ -296,7 +296,7 @@ assignmentsRouter.post('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[UpdateAssignment-POST] ========================================');
-    console.log('[UpdateAssignment-POST] Calling EXTERNAL API for assignment:', id);
+    console.log('[UpdateAssignment-POST] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${id}`);
     console.log('[UpdateAssignment-POST] Body:', JSON.stringify(req.body, null, 2));
     console.log('[UpdateAssignment-POST] ========================================');
 

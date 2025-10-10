@@ -4,7 +4,7 @@ import { VendorModel } from '../models/vendor';
 import { password } from '../utils/password';
 import { jwtService } from '../services/jwt';
 import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
-import { ExternalApiAdapter } from '../services/externalApiAdapter';
+import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
 
 export const authRouter = Router();
 
@@ -12,7 +12,7 @@ export const authRouter = Router();
 authRouter.get('/status', async (req, res) => {
   try {
     console.log('[AuthStatus] ========================================');
-    console.log('[AuthStatus] Calling EXTERNAL API...');
+    console.log('[AuthStatus] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/status`);
     console.log('[AuthStatus] ========================================');
 
     // Get the token from request headers
@@ -53,7 +53,7 @@ authRouter.get('/status', async (req, res) => {
 authRouter.post('/refresh', async (req, res) => {
   try {
     console.log('[AuthRefresh] ========================================');
-    console.log('[AuthRefresh] Calling EXTERNAL API...');
+    console.log('[AuthRefresh] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/refresh`);
     console.log('[AuthRefresh] ========================================');
 
     try {
@@ -99,7 +99,7 @@ authRouter.post('/login', async (req, res) => {
     console.log('[LOGIN] ========================================');
 
     // STEP 1: Call external API first
-    console.log('[LOGIN] STEP 1: Calling EXTERNAL API...');
+    console.log('[LOGIN] STEP 1: Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/login`);
     let externalResponse;
     try {
       externalResponse = await ExternalApiAdapter.login(username, pwd, role);
@@ -221,7 +221,7 @@ authRouter.post('/login-external', async (req, res) => {
     console.log('[LOGIN-EXTERNAL] ========================================');
 
     // STEP 1: Call external API first
-    console.log('[LOGIN-EXTERNAL] STEP 1: Calling EXTERNAL API...');
+    console.log('[LOGIN-EXTERNAL] STEP 1: Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/login`);
     let externalResponse;
     try {
       externalResponse = await ExternalApiAdapter.login(username, pwd, role);
