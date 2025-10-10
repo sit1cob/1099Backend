@@ -12,6 +12,66 @@ import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const jobsRouter = Router();
 
+// Helper to sync job from external API to MongoDB
+async function syncJobToMongo(externalJob: any): Promise<any> {
+  try {
+    if (!externalJob || !externalJob.id) {
+      console.log('[SyncJob] No valid job data to sync');
+      return null;
+    }
+
+    const jobId = externalJob.id;
+    
+    // Check if job already exists in MongoDB
+    const existingJob = await JobModel.findOne({ 
+      $or: [
+        { _id: mongoose.isValidObjectId(jobId) ? new mongoose.Types.ObjectId(jobId) : null },
+        { soNumber: externalJob.soNumber }
+      ]
+    }).lean();
+
+    const jobData = {
+      soNumber: externalJob.soNumber || `SO-${jobId}`,
+      customerName: externalJob.customerName || externalJob.firstName,
+      customerAddress: externalJob.customerAddress || externalJob.address,
+      customerCity: externalJob.customerCity || externalJob.city,
+      customerState: externalJob.customerState || externalJob.state,
+      customerZip: externalJob.customerZip || externalJob.zipCode,
+      customerPhone: externalJob.customerPhone || externalJob.phoneNumber,
+      customerEmail: externalJob.customerEmail || externalJob.email,
+      applianceType: externalJob.applianceType || externalJob.appliance,
+      manufacturerBrand: externalJob.manufacturerBrand || externalJob.brand,
+      serviceDescription: externalJob.serviceDescription || externalJob.description,
+      scheduledDate: externalJob.scheduledDate ? new Date(externalJob.scheduledDate) : undefined,
+      scheduledTimeWindow: externalJob.scheduledTimeWindow || externalJob.timeWindow,
+      priority: externalJob.priority || 'medium',
+      status: externalJob.status || 'available',
+      vendorId: externalJob.vendorId && mongoose.isValidObjectId(externalJob.vendorId) 
+        ? new mongoose.Types.ObjectId(externalJob.vendorId) 
+        : undefined,
+    };
+
+    if (existingJob) {
+      // Update existing job
+      await JobModel.updateOne({ _id: existingJob._id }, { $set: jobData });
+      console.log('[SyncJob] Updated existing job:', existingJob._id);
+      return await JobModel.findById(existingJob._id).lean();
+    } else {
+      // Create new job with the external ID if it's a valid ObjectId
+      const createData = mongoose.isValidObjectId(jobId)
+        ? { ...jobData, _id: new mongoose.Types.ObjectId(jobId) }
+        : jobData;
+      
+      const newJob = await JobModel.create(createData);
+      console.log('[SyncJob] Created new job:', newJob._id);
+      return newJob;
+    }
+  } catch (err: any) {
+    console.error('[SyncJob] Failed to sync job to MongoDB:', err.message);
+    return null;
+  }
+}
+
 // Helper to map an order/job doc to the DTO used by clients
 function mapToJobDTO(doc: any) {
   const soNumber = doc.soNumber || doc.raw?.SO_NO || `SO-${String(doc._id).slice(-6)}`;
@@ -120,6 +180,13 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       console.log('[JobDetails] ========== EXTERNAL API RESPONSE ==========');
       console.log('[JobDetails] Response:', JSON.stringify(externalResponse, null, 2));
       console.log('[JobDetails] ================================================');
+
+      // Sync job to MongoDB if successful
+      if (externalResponse.success && externalResponse.data) {
+        await syncJobToMongo(externalResponse.data);
+        console.log('[JobDetails] ✓ Job synced to MongoDB');
+      }
+
       console.log('[JobDetails] ✓ Returning external API response (success or failure)');
 
       // Always return external API response (even if failed)

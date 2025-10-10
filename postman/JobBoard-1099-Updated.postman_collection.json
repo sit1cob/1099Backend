@@ -116,7 +116,31 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "vendors", "me"]
             }
-          }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/vendors/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "vendors", "me"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 456,\n    \"name\": \"John's Appliance Repair\",\n    \"phoneNumber\": \"555-0123\",\n    \"email\": \"vendor@example.com\",\n    \"isActive\": true,\n    \"createdAt\": \"2024-01-15T10:00:00Z\",\n    \"stats\": {\n      \"totalJobs\": 150,\n      \"completedJobs\": 145,\n      \"averageRating\": 4.8\n    }\n  }\n}"
+            }
+          ],
+          "description": "Get the authenticated vendor's profile information including stats (total jobs, completed jobs, average rating). This endpoint proxies to the external API."
         },
         {
           "name": "Update My Profile",
