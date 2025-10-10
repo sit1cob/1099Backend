@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { randomUUID } from 'crypto';
 import mime from 'mime-types';
+import type { Request } from 'express';
 
 export const uploadsRouter = Router();
-uploadsRouter.use(authenticateJWT());
+// No authentication required for image uploads
 
 // Multer memory storage (no disk writes)
 const upload = multer({
@@ -42,7 +42,8 @@ function buildKey(filename: string) {
 
 // POST /api/uploads/image
 // Accepts multipart/form-data with field "file"; uploads to S3 and returns public URL
-uploadsRouter.post('/image', upload.single('file'), async (req: AuthenticatedRequest, res) => {
+// No authentication required
+uploadsRouter.post('/image', upload.single('file'), async (req: Request, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'file is required' });
 
