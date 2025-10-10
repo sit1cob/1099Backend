@@ -578,15 +578,33 @@
       ]
     },
     {
+      "name": "Parts",
+      "item": [
+        {
+          "name": "Delete Part by ID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "{{partId}}"]
+            }
+          },
+          "description": "Remove a part from the list. Proxies to external API."
+        }
+      ]
+    },
+    {
       "name": "Uploads",
       "item": [
         {
           "name": "Upload Image to S3",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/uploads/image",
               "host": ["{{baseUrl}}"],
@@ -602,7 +620,8 @@
                 }
               ]
             }
-          }
+          },
+          "description": "Upload an image to S3. No authentication required. Returns the S3 URL."
         }
       ]
     }
