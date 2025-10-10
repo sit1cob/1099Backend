@@ -22,15 +22,17 @@ async function syncJobToMongo(externalJob: any): Promise<any> {
 
     const jobId = externalJob.id;
     
-    // Check if job already exists in MongoDB
+    // Check if job already exists in MongoDB (by externalId, _id, or soNumber)
     const existingJob = await JobModel.findOne({ 
       $or: [
+        { externalId: String(jobId) },
         { _id: mongoose.isValidObjectId(jobId) ? new mongoose.Types.ObjectId(jobId) : null },
         { soNumber: externalJob.soNumber }
       ]
     }).lean();
 
     const jobData = {
+      externalId: String(jobId), // Always store external ID
       soNumber: externalJob.soNumber || `SO-${jobId}`,
       customerName: externalJob.customerName || externalJob.firstName,
       customerAddress: externalJob.customerAddress || externalJob.address,
@@ -185,11 +187,25 @@ jobsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       if (externalResponse.success && externalResponse.data) {
         await syncJobToMongo(externalResponse.data);
         console.log('[JobDetails] ✓ Job synced to MongoDB');
+
+        // Get productInfoUpdate from MongoDB and merge it into the response
+        const mongoJob = await JobModel.findOne({
+          $or: [
+            { externalId: String(id) },
+            { _id: mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null }
+          ]
+        }).lean();
+
+        if (mongoJob && mongoJob.productInfoUpdate) {
+          // Merge productInfoUpdate from MongoDB into external API response
+          externalResponse.data.productInfoUpdate = mongoJob.productInfoUpdate;
+          console.log('[JobDetails] ✓ Merged productInfoUpdate from MongoDB:', mongoJob.productInfoUpdate);
+        }
       }
 
-      console.log('[JobDetails] ✓ Returning external API response (success or failure)');
+      console.log('[JobDetails] ✓ Returning external API response with MongoDB data');
 
-      // Always return external API response (even if failed)
+      // Return external API response with merged MongoDB data
       return res.json(externalResponse);
     } catch (extErr: any) {
       console.error('[JobDetails] ✗ External API call failed:', extErr.message);
@@ -304,9 +320,16 @@ jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, r
       await syncJobToMongo(jobResponse.data);
       console.log('[ProductInfoUpdate] Job synced to MongoDB');
 
-      // Update product info in MongoDB
-      if (!mongoose.isValidObjectId(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid job id' });
+      // Find job by external ID or MongoDB ID
+      const job = await JobModel.findOne({
+        $or: [
+          { externalId: String(id) },
+          { _id: mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null }
+        ]
+      }).lean();
+
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found in MongoDB' });
       }
 
       const set: any = {};
@@ -317,8 +340,8 @@ jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, r
       if (typeof issue === 'string') set['productInfoUpdate.issue'] = issue;
       if (typeof imageUrl === 'string') set['productInfoUpdate.imageUrl'] = imageUrl;
 
-      await JobModel.updateOne({ _id: id }, { $set: set });
-      const updated = await JobModel.findById(id).lean();
+      await JobModel.updateOne({ _id: job._id }, { $set: set });
+      const updated = await JobModel.findById(job._id).lean();
       
       console.log('[ProductInfoUpdate] ✓ Product info updated successfully');
       return res.json({ success: true, data: mapToJobDTO(updated) });
