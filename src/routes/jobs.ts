@@ -260,6 +260,81 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// PATCH /api/jobs/:id/product-info-update - NO AUTH (works with external API token)
+// Allows vendor to update product details: productLine, brand, modelNumber, serialNumber, issue, imageUrl
+// This must be defined BEFORE the authenticateJWT() middleware
+jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('[ProductInfoUpdate] ========================================');
+    console.log('[ProductInfoUpdate] Updating product info for job:', id);
+    console.log('[ProductInfoUpdate] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    const { productLine, brand, modelNumber, serialNumber, issue, imageUrl } = (req.body || {}) as { 
+      productLine?: string; 
+      brand?: string; 
+      modelNumber?: string;
+      serialNumber?: string;
+      issue?: string;
+      imageUrl?: string 
+    };
+    
+    if (productLine == null && brand == null && modelNumber == null && serialNumber == null && issue == null && imageUrl == null) {
+      return res.status(400).json({ success: false, message: 'No fields to update. Provide productLine, brand, modelNumber, serialNumber, issue, or imageUrl.' });
+    }
+
+    // First, fetch the job from external API to ensure it exists and vendor has access
+    try {
+      const jobResponse = await ExternalApiAdapter.callExternalApi(`/api/jobs/${id}`, token, 'GET');
+      
+      if (!jobResponse.success || !jobResponse.data) {
+        return res.status(404).json({ success: false, message: 'Job not found or access denied' });
+      }
+
+      // Sync job to MongoDB if not already there
+      await syncJobToMongo(jobResponse.data);
+      console.log('[ProductInfoUpdate] Job synced to MongoDB');
+
+      // Update product info in MongoDB
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid job id' });
+      }
+
+      const set: any = {};
+      if (typeof productLine === 'string') set['productInfoUpdate.productLine'] = productLine;
+      if (typeof brand === 'string') set['productInfoUpdate.brand'] = brand;
+      if (typeof modelNumber === 'string') set['productInfoUpdate.modelNumber'] = modelNumber;
+      if (typeof serialNumber === 'string') set['productInfoUpdate.serialNumber'] = serialNumber;
+      if (typeof issue === 'string') set['productInfoUpdate.issue'] = issue;
+      if (typeof imageUrl === 'string') set['productInfoUpdate.imageUrl'] = imageUrl;
+
+      await JobModel.updateOne({ _id: id }, { $set: set });
+      const updated = await JobModel.findById(id).lean();
+      
+      console.log('[ProductInfoUpdate] ✓ Product info updated successfully');
+      return res.json({ success: true, data: mapToJobDTO(updated) });
+    } catch (extErr: any) {
+      console.error('[ProductInfoUpdate] ✗ Failed to update product info:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'Failed to update product info' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[ProductInfoUpdate] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update product info' });
+  }
+});
+
 // Apply authentication middleware to all routes below this point
 jobsRouter.use(authenticateJWT());
 
@@ -390,47 +465,3 @@ jobsRouter.post('/', async (req: AuthenticatedRequest, res) => {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to create job' });
   }
 });
-// PATCH /api/jobs/:id/product-info-update
-// Allows the assigned vendor to update product details: productLine, brand, modelNumber, serialNumber, issue, imageUrl
-jobsRouter.patch('/:id/product-info-update', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid job id' });
-
-    const job = await JobModel.findById(id).lean();
-    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
-
-    // Only the vendor assigned to this job can update product info
-    if (!job.vendorId || String(job.vendorId) !== String(req.user.vendorId)) {
-      return res.status(403).json({ success: false, message: 'You are not assigned to this job' });
-    }
-
-    const { productLine, brand, modelNumber, serialNumber, issue, imageUrl } = (req.body || {}) as { 
-      productLine?: string; 
-      brand?: string; 
-      modelNumber?: string;
-      serialNumber?: string;
-      issue?: string;
-      imageUrl?: string 
-    };
-    if (productLine == null && brand == null && modelNumber == null && serialNumber == null && issue == null && imageUrl == null) {
-      return res.status(400).json({ success: false, message: 'No fields to update. Provide productLine, brand, modelNumber, serialNumber, issue, or imageUrl.' });
-    }
-
-    const set: any = {};
-    if (typeof productLine === 'string') set['productInfoUpdate.productLine'] = productLine;
-    if (typeof brand === 'string') set['productInfoUpdate.brand'] = brand;
-    if (typeof modelNumber === 'string') set['productInfoUpdate.modelNumber'] = modelNumber;
-    if (typeof serialNumber === 'string') set['productInfoUpdate.serialNumber'] = serialNumber;
-    if (typeof issue === 'string') set['productInfoUpdate.issue'] = issue;
-    if (typeof imageUrl === 'string') set['productInfoUpdate.imageUrl'] = imageUrl;
-
-    await JobModel.updateOne({ _id: id }, { $set: set });
-    const updated = await JobModel.findById(id).lean();
-    return res.json({ success: true, data: mapToJobDTO(updated) });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to update product info' });
-  }
-});
-
