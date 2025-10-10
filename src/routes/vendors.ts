@@ -10,6 +10,48 @@ import { ExternalApiAdapter } from '../services/externalApiAdapter';
 
 export const vendorsRouter = Router();
 
+// GET /api/vendors/me - Get current vendor profile (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorProfile] ========================================');
+    console.log('[VendorProfile] Calling EXTERNAL API...');
+    console.log('[VendorProfile] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/vendors/me', token, 'GET');
+      
+      console.log('[VendorProfile] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[VendorProfile] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[VendorProfile] ================================================');
+      console.log('[VendorProfile] ✓ Returning external API response (success or failure)');
+
+      // Always return external API response (even if failed)
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[VendorProfile] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorProfile] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch vendor profile' });
+  }
+});
+
 // GET /api/vendors/me/jobs - NO AUTH (proxies to external API)
 // This must be defined BEFORE the authenticateJWT() middleware
 vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {
