@@ -529,6 +529,134 @@ vendorsRouter.delete('/parts/:partId/photos', async (req: AuthenticatedRequest, 
   }
 });
 
+// POST /api/vendors/me/photos - NO AUTH (proxies to external API)
+// Upload photos for assignment/part with assignmentId
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.post('/me/photos', upload.array('photos', 10), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { assignmentId, description } = req.body;
+    
+    console.log('[AddPartPhoto] ========================================');
+    console.log('[AddPartPhoto] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/photos`);
+    console.log('[AddPartPhoto] Assignment ID:', assignmentId);
+    console.log('[AddPartPhoto] Description:', description);
+    console.log('[AddPartPhoto] Files count:', req.files ? (req.files as Express.Multer.File[]).length : 0);
+    console.log('[AddPartPhoto] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    // Validate assignmentId
+    if (!assignmentId) {
+      return res.status(400).json({ success: false, message: 'assignmentId is required' });
+    }
+
+    // Validate files
+    if (!req.files || (req.files as Express.Multer.File[]).length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one photo is required' });
+    }
+
+    const files = req.files as Express.Multer.File[];
+    
+    // Validate file count
+    if (files.length > 10) {
+      return res.status(400).json({ success: false, message: 'Maximum 10 photos allowed per upload' });
+    }
+
+    try {
+      // Create FormData for multipart upload
+      const formData = new FormData();
+      
+      // Append each file
+      files.forEach((file) => {
+        formData.append('photos', file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+      });
+      
+      // Append assignmentId
+      formData.append('assignmentId', assignmentId);
+      
+      // Append description if provided
+      if (description) {
+        formData.append('description', description);
+      }
+
+      // Call external API with multipart data
+      const externalResponse = await ExternalApiAdapter.uploadMultipartData(
+        `/api/vendors/me/photos`,
+        token,
+        formData
+      );
+      
+      console.log('[AddPartPhoto] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AddPartPhoto] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AddPartPhoto] ================================================');
+
+      // Save photo URLs to MongoDB if we have part information
+      const savedPhotos: any[] = [];
+      if (externalResponse?.success && externalResponse?.data?.photos) {
+        console.log('[AddPartPhoto] Saving photos to MongoDB...');
+        
+        for (const photo of externalResponse.data.photos) {
+          try {
+            // Only save if we have a partId in the response
+            if (photo.partId) {
+              const savedPhoto = await PartPhotoModel.create({
+                partId: photo.partId,
+                photoId: photo.id || photo.photoId,
+                photoUrl: photo.url || photo.photoUrl,
+                description: description || photo.description,
+                uploadedAt: new Date(),
+              });
+              savedPhotos.push({
+                id: savedPhoto._id,
+                partId: savedPhoto.partId,
+                photoId: savedPhoto.photoId,
+                photoUrl: savedPhoto.photoUrl,
+                description: savedPhoto.description,
+                uploadedAt: savedPhoto.uploadedAt,
+              });
+            }
+          } catch (saveErr: any) {
+            console.error('[AddPartPhoto] Failed to save photo to MongoDB:', saveErr.message);
+          }
+        }
+        
+        if (savedPhotos.length > 0) {
+          console.log('[AddPartPhoto] ✓ Saved', savedPhotos.length, 'photos to MongoDB');
+        }
+      }
+
+      // Return combined response with MongoDB data
+      const combinedResponse = {
+        ...externalResponse,
+        mongoPhotos: savedPhotos,
+      };
+
+      console.log('[AddPartPhoto] ✓ Returning combined response');
+      return res.json(combinedResponse);
+    } catch (extErr: any) {
+      console.error('[AddPartPhoto] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AddPartPhoto] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to upload part photos' });
+  }
+});
+
 // Require auth for all vendor routes BELOW this point
 vendorsRouter.use(authenticateJWT());
 
