@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "1099 Job Board - Updated",
+    "name": "1099 Job Board - Updated V",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_postman_id": "e6f1f2f0-1a2b-4f2b-9f20-9b4edc0d1abc",
     "description": "Updated collection with part_status field and delete parts endpoints"
@@ -649,6 +649,61 @@
             }
           },
           "description": "Remove uploaded photos for a part. Deletes from external API and MongoDB."
+        },
+        {
+          "name": "Add Part Photo (via /vendors/me/photos)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "photos"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "assignmentId",
+                  "value": "147",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Test upload",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "description": "Upload photos for assignment/part. Requires assignmentId. Maximum 10 photos per upload, 10MB per file. Saves to external API and MongoDB."
+        },
+        {
+          "name": "Add Parts to Assignment 2",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/vendor/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "vendor", "parts"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Whirlpool\",\n  \"applianceType\": \"Dishwasher\",\n  \"partNumber\": \"GEP65X110030\",\n  \"serialNumber\": \"\",\n  \"assignmentId\": 661,\n  \"brand\": \"Whirlpool\",\n  \"notes\": \"\",\n  \"partNumber\": \"GEP65X110030\",\n  \"partType\": \"local\",\n  \"quantity\": 1,\n  \"serialNumber\": \"\"\n}"
+            }
+          },
+          "description": "Add parts to an assignment. Proxies to external API /api/auth/vendor/parts."
         }
       ]
     },
@@ -682,7 +737,7 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://1099-app-93c69bc1721a38c3.elb.us-east-2.amazonaws.com" },
+    { "key": "baseUrl", "value": "http://localhost:5010" },
     { "key": "accessToken", "value": "" },
     { "key": "jobId", "value": "" },
     { "key": "assignmentId", "value": "" },
