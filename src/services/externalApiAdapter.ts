@@ -1,4 +1,5 @@
 import axios from 'axios';
+import FormData from 'form-data';
 import { ExternalApiCacheModel } from '../models/externalApiCache';
 
 //const EXTERNAL_API_BASE_URL = 'https://48d99eca-33b7-4a28-9c21-b6eaa571ad6b-00-2397wpudnvwvi.picard.replit.dev';
@@ -122,7 +123,7 @@ export class ExternalApiAdapter {
         timeout: 30000, // Increased from 10s to 30s to handle slow Replit server
       };
 
-      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
         config.data = data;
       }
 
@@ -150,6 +151,56 @@ export class ExternalApiAdapter {
       }
       console.error('[ExternalApiAdapter] ================================================');
       throw new Error(error.response?.data?.message || 'External API call failed');
+    }
+  }
+
+  /**
+   * Upload multipart/form-data to external API
+   */
+  static async uploadMultipartData(endpoint: string, token: string, formData: FormData) {
+    const url = `${EXTERNAL_API_BASE_URL}${endpoint}`;
+    
+    try {
+      console.log('[ExternalApiAdapter] ========== MULTIPART UPLOAD REQUEST ==========');
+      console.log('[ExternalApiAdapter] URL:', url);
+      console.log('[ExternalApiAdapter] Method: POST');
+      console.log('[ExternalApiAdapter] Content-Type: multipart/form-data');
+      console.log('[ExternalApiAdapter] Token (first 20 chars):', token.substring(0, 20) + '...');
+      
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...formData.getHeaders(),
+        },
+        timeout: 60000, // 60 seconds for file uploads
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+
+      console.log('[ExternalApiAdapter] ========== MULTIPART UPLOAD RESPONSE ==========');
+      console.log('[ExternalApiAdapter] Status:', response.status);
+      console.log('[ExternalApiAdapter] Response:', JSON.stringify(response.data, null, 2));
+      console.log('[ExternalApiAdapter] ================================================');
+
+      return response.data;
+    } catch (error: any) {
+      console.error('[ExternalApiAdapter] ========== MULTIPART UPLOAD FAILED ==========');
+      console.error('[ExternalApiAdapter] Failed Request Details:');
+      console.error('[ExternalApiAdapter]   Method: POST');
+      console.error('[ExternalApiAdapter]   Endpoint:', endpoint);
+      console.error('[ExternalApiAdapter]   Full URL:', url);
+      console.error('[ExternalApiAdapter] Error Details:');
+      console.error('[ExternalApiAdapter]   Error Message:', error.message);
+      if (error.response) {
+        console.error('[ExternalApiAdapter]   HTTP Status:', error.response.status);
+        console.error('[ExternalApiAdapter]   Status Text:', error.response.statusText);
+        console.error('[ExternalApiAdapter]   Response Data:', JSON.stringify(error.response.data, null, 2));
+      } else if (error.request) {
+        console.error('[ExternalApiAdapter]   No response received from server');
+        console.error('[ExternalApiAdapter]   Request timeout or network error');
+      }
+      console.error('[ExternalApiAdapter] ================================================');
+      throw new Error(error.response?.data?.message || 'Multipart upload failed');
     }
   }
 

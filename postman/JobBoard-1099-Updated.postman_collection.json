@@ -594,6 +594,61 @@
             }
           },
           "description": "Remove a part from the list. Proxies to external API."
+        },
+        {
+          "name": "Upload Part Photos",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/parts/{{partId}}/photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "parts", "{{partId}}", "photos"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos[]",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "photos[]",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "description",
+                  "value": "Defective part removed",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "description": "Upload photos for parts documentation. Maximum 10 photos per upload, 10MB per file. Saves to external API and MongoDB."
+        },
+        {
+          "name": "Delete Part Photos",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/parts/{{partId}}/photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "parts", "{{partId}}", "photos"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"photoIds\": [777, 778]\n}"
+            }
+          },
+          "description": "Remove uploaded photos for a part. Deletes from external API and MongoDB."
         }
       ]
     },
