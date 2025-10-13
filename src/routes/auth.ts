@@ -514,3 +514,51 @@ authRouter.get('/vendor/assignments/:assignmentId/parts', async (req, res) => {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to get assignment parts' });
   }
 });
+
+// DELETE /api/auth/vendor/parts/:partId - NO AUTH (proxies to external API)
+authRouter.delete('/vendor/parts/:partId', async (req, res) => {
+  try {
+    const { partId } = req.params;
+    
+    console.log('[DeleteVendorPart] ========================================');
+    console.log('[DeleteVendorPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/parts/${partId}`);
+    console.log('[DeleteVendorPart] Part ID:', partId);
+    console.log('[DeleteVendorPart] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/auth/vendor/parts/${partId}`,
+        token,
+        'DELETE'
+      );
+      
+      console.log('[DeleteVendorPart] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[DeleteVendorPart] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[DeleteVendorPart] ================================================');
+      console.log('[DeleteVendorPart] ✓ Returning external API response');
+
+      // Return external API response as-is
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[DeleteVendorPart] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[DeleteVendorPart] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
+  }
+});

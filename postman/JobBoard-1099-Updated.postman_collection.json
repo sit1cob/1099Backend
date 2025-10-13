@@ -719,6 +719,21 @@
             }
           },
           "description": "Get all parts for a specific assignment. Proxies to external API /api/auth/vendor/assignments/:assignmentId/parts."
+        },
+        {
+          "name": "Delete Vendor Part",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/vendor/parts/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "vendor", "parts", "{{partId}}"]
+            }
+          },
+          "description": "Delete a part by ID. Proxies to external API /api/auth/vendor/parts/:partId."
         }
       ]
     },
