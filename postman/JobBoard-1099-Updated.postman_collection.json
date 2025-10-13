@@ -704,6 +704,21 @@
             }
           },
           "description": "Add parts to an assignment. Proxies to external API /api/auth/vendor/parts."
+        },
+        {
+          "name": "Get Assignment Parts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/vendor/assignments/{{assignmentId}}/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "vendor", "assignments", "{{assignmentId}}", "parts"]
+            }
+          },
+          "description": "Get all parts for a specific assignment. Proxies to external API /api/auth/vendor/assignments/:assignmentId/parts."
         }
       ]
     },

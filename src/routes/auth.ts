@@ -466,3 +466,51 @@ authRouter.post('/register-vendor', async (req, res) => {
     return res.status(500).json({ success: false, message: err?.message || 'Registration failed' });
   }
 });
+
+// GET /api/auth/vendor/assignments/:assignmentId/parts - NO AUTH (proxies to external API)
+authRouter.get('/vendor/assignments/:assignmentId/parts', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    
+    console.log('[GetAssignmentParts] ========================================');
+    console.log('[GetAssignmentParts] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/assignments/${assignmentId}/parts`);
+    console.log('[GetAssignmentParts] Assignment ID:', assignmentId);
+    console.log('[GetAssignmentParts] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/auth/vendor/assignments/${assignmentId}/parts`,
+        token,
+        'GET'
+      );
+      
+      console.log('[GetAssignmentParts] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[GetAssignmentParts] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[GetAssignmentParts] ================================================');
+      console.log('[GetAssignmentParts] ✓ Returning external API response');
+
+      // Return external API response as-is
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[GetAssignmentParts] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[GetAssignmentParts] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to get assignment parts' });
+  }
+});
