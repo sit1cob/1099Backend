@@ -684,56 +684,6 @@
             }
           },
           "description": "Upload photos for assignment/part. Requires assignmentId. Maximum 10 photos per upload, 10MB per file. Saves to external API and MongoDB."
-        },
-        {
-          "name": "Add Parts to Assignment 2",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/vendor/parts",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "vendor", "parts"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"brand\": \"Whirlpool\",\n  \"applianceType\": \"Dishwasher\",\n  \"partNumber\": \"GEP65X110030\",\n  \"serialNumber\": \"\",\n  \"assignmentId\": 661,\n  \"brand\": \"Whirlpool\",\n  \"notes\": \"\",\n  \"partNumber\": \"GEP65X110030\",\n  \"partType\": \"local\",\n  \"quantity\": 1,\n  \"serialNumber\": \"\"\n}"
-            }
-          },
-          "description": "Add parts to an assignment. Proxies to external API /api/auth/vendor/parts."
-        },
-        {
-          "name": "Get Assignment Parts",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/vendor/assignments/{{assignmentId}}/parts",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "vendor", "assignments", "{{assignmentId}}", "parts"]
-            }
-          },
-          "description": "Get all parts for a specific assignment. Proxies to external API /api/auth/vendor/assignments/:assignmentId/parts."
-        },
-        {
-          "name": "Delete Vendor Part",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/vendor/parts/{{partId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "vendor", "parts", "{{partId}}"]
-            }
-          },
-          "description": "Delete a part by ID. Proxies to external API /api/auth/vendor/parts/:partId."
         }
       ]
     },
