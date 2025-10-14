@@ -712,6 +712,21 @@
             }
           },
           "description": "Upload an image to S3. No authentication required. Returns the S3 URL."
+        },
+        {
+          "name": "Download Photo",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/photos/9fdbd116165487036c6588666b9a12ea",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "photos", "9fdbd116165487036c6588666b9a12ea"]
+            }
+          },
+          "description": "Download photo from external API. Streams the image from https://shs-1099-job-board.replit.app/uploads/photos/{photoId}"
         }
       ]
     }

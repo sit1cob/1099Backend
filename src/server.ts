@@ -13,6 +13,9 @@ import { usersRouter } from './routes/users';
 import { startJobWatcher } from './services/jobWatcher';
 import { partsRouter } from './routes/parts';
 import { uploadsRouter } from './routes/uploads';
+import axios from 'axios';
+
+const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'https://shs-1099-job-board.replit.app';
 
 const PORT = Number(process.env.PORT || 5001);
 
@@ -39,6 +42,48 @@ async function main() {
   app.use('/api/parts', partsRouter);
   app.use('/api/uploads', uploadsRouter);
   app.use('/api/users', usersRouter);
+
+  // Photo proxy route - mirrors external API structure
+  app.get('/uploads/photos/*', async (req, res) => {
+    try {
+      const photoPath = (req.params as any)[0];
+      const fullPath = `/uploads/photos/${photoPath}`;
+      
+      console.log('[PhotoProxy] Downloading photo:', `${EXTERNAL_API_URL}${fullPath}`);
+
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'No token provided' });
+      }
+
+      const response = await axios({
+        method: 'GET',
+        url: `${EXTERNAL_API_URL}${fullPath}`,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        responseType: 'stream',
+        timeout: 30000,
+      });
+      
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      }
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      
+      response.data.pipe(res);
+    } catch (err: any) {
+      console.error('[PhotoProxy] Error:', err.message);
+      return res.status(err.response?.status || 500).json({ 
+        success: false, 
+        message: err.message || 'Failed to download photo' 
+      });
+    }
+  });
 
   // Not found handler
   app.use((req, res) => {

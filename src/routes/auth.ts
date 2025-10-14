@@ -582,3 +582,62 @@ authRouter.delete('/vendor/parts/:partId', async (req, res) => {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
   }
 });
+
+// GET /api/auth/photos/* - Download photo from external API
+authRouter.get('/photos/*', async (req, res) => {
+  try {
+    const photoPath = req.params[0]; // Gets everything after /photos/
+    const fullPath = `/uploads/photos/${photoPath}`;
+    
+    console.log('[DownloadPhoto] ========================================');
+    console.log('[DownloadPhoto] Downloading photo from EXTERNAL API:', `${EXTERNAL_API_URL}${fullPath}`);
+    console.log('[DownloadPhoto] Photo Path:', photoPath);
+    console.log('[DownloadPhoto] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const axios = require('axios');
+      const url = `${EXTERNAL_API_URL}${fullPath}`;
+      
+      const response = await axios({
+        method: 'GET',
+        url,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        responseType: 'stream', // Important: stream the image data
+        timeout: 30000,
+      });
+      
+      // Set content type from external API response
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      }
+      
+      // Set content length if available
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      
+      console.log('[DownloadPhoto] ✓ Streaming photo to client');
+      
+      // Pipe the image stream to response
+      response.data.pipe(res);
+    } catch (extErr: any) {
+      console.error('[DownloadPhoto] ✗ External API call failed:', extErr.message);
+      return res.status(extErr.response?.status || 500).json({ 
+        success: false, 
+        message: extErr.message || 'Failed to download photo' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[DownloadPhoto] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to download photo' });
+  }
+});
