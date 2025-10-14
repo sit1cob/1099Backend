@@ -1,12 +1,15 @@
 import { Router } from 'express';
-import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { VendorModel } from '../models/vendor';
-import { OrderModel } from '../models/order';
-import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
-import { PartModel } from '../models/part';
-import mongoose from 'mongoose';
+import { JobAssignmentModel } from '../models/jobAssignment';
+import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
+import multer from 'multer';
+import FormData from 'form-data';
+import axios from 'axios';
+
+// Configure multer for memory storage
+const upload = multer({ storage: multer.memoryStorage() });
 
 export const vendorsRouter = Router();
 
@@ -312,6 +315,73 @@ vendorsRouter.delete('/me/parts/:partId', async (req: AuthenticatedRequest, res)
   } catch (err: any) {
     console.error('[DeleteVendorPart] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
+  }
+});
+
+// POST /api/vendors/me/photos - NO AUTH (proxies to external API)
+// Upload photos for an assignment - handles multipart/form-data
+vendorsRouter.post('/me/photos', upload.array('photos', 10), async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorPhotos] ========================================');
+    console.log('[VendorPhotos] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/photos`);
+    console.log('[VendorPhotos] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // For file uploads, we need to use FormData
+      const formData = new FormData();
+      
+      // Copy all fields from request body to FormData
+      if (req.body) {
+        Object.keys(req.body).forEach(key => {
+          formData.append(key, req.body[key]);
+        });
+      }
+      
+      // Copy files if they exist (from multer middleware)
+      if ((req as any).files) {
+        const files = (req as any).files;
+        if (Array.isArray(files)) {
+          files.forEach((file: any) => {
+            formData.append('photos', file.buffer, {
+              filename: file.originalname,
+              contentType: file.mimetype,
+            });
+          });
+        }
+      }
+      
+      const response = await axios.post(
+        `${EXTERNAL_API_URL}/api/vendors/me/photos`,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            'Authorization': `Bearer ${token}`,
+          },
+          timeout: 30000,
+        }
+      );
+      
+      console.log('[VendorPhotos] ✓ Returning external API response');
+      return res.json(response.data);
+    } catch (extErr: any) {
+      console.error('[VendorPhotos] ✗ External API call failed:', extErr.message);
+      return res.status(extErr.response?.status || 500).json({ 
+        success: false, 
+        message: extErr.response?.data?.message || extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorPhotos] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to upload photos' });
   }
 });
 
