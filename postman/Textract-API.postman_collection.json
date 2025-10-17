@@ -1,0 +1,135 @@
+{
+  "info": {
+    "name": "Textract API - Image Text Extraction",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "textract-api-2024",
+    "description": "Extract appliance information from images using OpenAI GPT-4 Vision"
+  },
+  "item": [
+    {
+      "name": "1. Extract Basic Appliance Info",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "image",
+              "type": "file",
+              "src": [],
+              "description": "Upload an image of the appliance label"
+            },
+            {
+              "key": "email",
+              "value": "test@example.com",
+              "type": "text",
+              "description": "User email for S3 storage (optional)"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/textract/extract-appliance-info",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "textract", "extract-appliance-info"]
+        },
+        "description": "Extract model number, serial number, brand, and year of manufacturing from an appliance image.\n\n**Response:**\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"modelNumber\": \"GTS18GTHWW\",\n    \"serialNumber\": \"SN123456789\",\n    \"brand\": \"GE\",\n    \"yearOfManufacturing\": \"2020\"\n  }\n}\n```"
+      }
+    },
+    {
+      "name": "2. Extract All Appliance Details",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "image",
+              "type": "file",
+              "src": [],
+              "description": "Upload an image of the appliance label"
+            },
+            {
+              "key": "userId",
+              "value": "user-123",
+              "type": "text",
+              "description": "User ID for S3 storage (optional)"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/textract/extract-all-details",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "textract", "extract-all-details"]
+        },
+        "description": "Extract comprehensive appliance details including type, voltage, amperage, and power rating.\n\n**Response:**\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"type\": \"Refrigerator\",\n    \"brand\": \"Samsung\",\n    \"serial\": \"ABC123XYZ\",\n    \"model\": \"RF28R7351SR\",\n    \"voltage\": \"220\",\n    \"amperage\": \"5\",\n    \"powerRating\": \"1100W\",\n    \"dateOfManufacture\": \"2021\"\n  }\n}\n```"
+      }
+    },
+    {
+      "name": "3. Test with Sample Image (Basic)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "image",
+              "type": "file",
+              "src": "/path/to/sample-appliance-label.jpg",
+              "description": "Replace with actual image path"
+            },
+            {
+              "key": "email",
+              "value": "demo@example.com",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/textract/extract-appliance-info",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "textract", "extract-appliance-info"]
+        },
+        "description": "Test endpoint with a sample appliance label image"
+      }
+    },
+    {
+      "name": "4. Test with Sample Image (All Details)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "image",
+              "type": "file",
+              "src": "/path/to/sample-appliance-label.jpg",
+              "description": "Replace with actual image path"
+            },
+            {
+              "key": "userId",
+              "value": "demo-user-123",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/textract/extract-all-details",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "textract", "extract-all-details"]
+        },
+        "description": "Test comprehensive extraction with a sample image"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5010",
+      "type": "default"
+    }
+  ]
+}

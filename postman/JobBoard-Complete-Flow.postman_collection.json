@@ -1,0 +1,442 @@
+{
+  "info": {
+    "name": "1099 Job Board - Complete Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "complete-flow-2024",
+    "description": "Complete API flow with proper dependencies - Login → Jobs → Claim → Assignment → Reschedule → Check-Out"
+  },
+  "item": [
+    {
+      "name": "1. Auth - Login (Entry Point)",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.success && json.data) {",
+                  "  if (json.data.accessToken) {",
+                  "    pm.environment.set('accessToken', json.data.accessToken);",
+                  "    console.log('✅ Token saved:', json.data.accessToken.substring(0, 20) + '...');",
+                  "  }",
+                  "  if (json.data.userId) {",
+                  "    pm.environment.set('userId', json.data.userId);",
+                  "    console.log('✅ UserId saved:', json.data.userId);",
+                  "  }",
+                  "  if (json.data.refreshToken) {",
+                  "    pm.environment.set('refreshToken', json.data.refreshToken);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"AIJ_Appliances\",\n  \"password\": \"password123\",\n  \"role\": \"registered_user\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Jobs - Get Available Jobs",
+      "item": [
+        {
+          "name": "Get Available Jobs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.success && json.data) {",
+                  "  let jobs = json.data.jobs || json.data;",
+                  "  if (Array.isArray(jobs) && jobs.length > 0) {",
+                  "    const firstJob = jobs[0];",
+                  "    if (firstJob.id) {",
+                  "      pm.environment.set('jobId', firstJob.id);",
+                  "      console.log('✅ JobId saved:', firstJob.id);",
+                  "    }",
+                  "    if (firstJob.jobNumber) {",
+                  "      console.log('Job Number:', firstJob.jobNumber);",
+                  "    }",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/available?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "available"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Job Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "{{jobId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Jobs - Claim Job",
+      "item": [
+        {
+          "name": "Claim Job",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.success && json.data) {",
+                  "  if (json.data.id) {",
+                  "    pm.environment.set('assignmentId', json.data.id);",
+                  "    console.log('✅ AssignmentId saved:', json.data.id);",
+                  "  }",
+                  "  if (json.data.location) {",
+                  "    console.log('Assignment Location:', json.data.location);",
+                  "  }",
+                  "  if (json.data.rescheduleResult) {",
+                  "    console.log('⚠️ Reschedule Result:', JSON.stringify(json.data.rescheduleResult));",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorNotes\": \"I can handle this repair\",\n  \"action\": \"accept\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/{{jobId}}/claims",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "{{jobId}}", "claims"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Assignments - Get & Manage",
+      "item": [
+        {
+          "name": "Get Assignment Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get My Assignments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.success && Array.isArray(json.data) && json.data.length > 0) {",
+                  "  const first = json.data[0];",
+                  "  if (first.id) {",
+                  "    pm.environment.set('assignmentId', first.id);",
+                  "    console.log('✅ AssignmentId saved from list:', first.id);",
+                  "  }",
+                  "  if (first.jobId) {",
+                  "    pm.environment.set('jobId', first.jobId);",
+                  "    console.log('✅ JobId saved from list:', first.jobId);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "assignments"]
+            }
+          }
+        },
+        {
+          "name": "Check-In to Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"arrived\",\n  \"actualArrival\": \"{{$isoTimestamp}}\",\n  \"notes\": \"Arrived at customer location\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Check-Out from Assignment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.invoiceId) {",
+                  "    pm.environment.set('invoiceId', json.data.invoiceId);",
+                  "    console.log('✅ InvoiceId saved:', json.data.invoiceId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\",\n  \"completedAt\": \"{{$isoTimestamp}}\",\n  \"completionNotes\": \"Replaced water filter and cleaned coils. Refrigerator cooling normally.\",\n  \"laborHours\": 1.5,\n  \"totalPartsCost\": 45.99,\n  \"totalLaborCost\": 150.00,\n  \"totalCost\": 195.99\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Reschedule - Request & Track",
+      "item": [
+        {
+          "name": "Request Reschedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.success && json.data) {",
+                  "  if (json.data.rescheduleId) {",
+                  "    pm.environment.set('rescheduleId', json.data.rescheduleId);",
+                  "    console.log('✅ RescheduleId saved:', json.data.rescheduleId);",
+                  "  }",
+                  "  if (json.data.status) {",
+                  "    console.log('Reschedule Status:', json.data.status);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newScheduledDate\": \"2025-10-25\",\n  \"newTimeWindow\": \"1PM-5PM\",\n  \"rescheduleReason\": \"Customer Requested New Time\",\n  \"vendorNotes\": \"Customer called to reschedule\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/reschedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "reschedule"]
+            }
+          }
+        },
+        {
+          "name": "Get Reschedule Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reschedules/{{rescheduleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reschedules", "{{rescheduleId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Parts Management",
+      "item": [
+        {
+          "name": "Add Part to Assignment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('partId', json.data.id);",
+                  "    console.log('✅ PartId saved:', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignmentId\": \"{{assignmentId}}\",\n  \"partNumber\": \"WP2198202\",\n  \"partName\": \"Refrigerator Water Filter\",\n  \"quantity\": 1,\n  \"unitCost\": 45.99,\n  \"part_status\": \"inHand\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts"]
+            }
+          }
+        },
+        {
+          "name": "Get Assignment Parts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", "{{assignmentId}}", "parts"]
+            }
+          }
+        },
+        {
+          "name": "Delete Part",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/parts/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "parts", "{{partId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Vendor Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "dashboard"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5010" },
+    { "key": "accessToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "jobId", "value": "" },
+    { "key": "assignmentId", "value": "" },
+    { "key": "rescheduleId", "value": "" },
+    { "key": "partId", "value": "" },
+    { "key": "invoiceId", "value": "" }
+  ]
+}
