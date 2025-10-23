@@ -50,6 +50,23 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
           if (jobResponse.success && jobResponse.data) {
             jobDetails = jobResponse.data;
             console.log('[AssignmentDetails] ✓ Job details fetched successfully');
+
+            // STEP 2.1: Fetch productInfoUpdate from MongoDB and merge it
+            try {
+              const mongoJob = await JobModel.findOne({
+                $or: [
+                  { externalId: String(assignment.jobId) },
+                  { _id: mongoose.isValidObjectId(assignment.jobId) ? new mongoose.Types.ObjectId(assignment.jobId) : null }
+                ]
+              }).lean();
+
+              if (mongoJob && mongoJob.productInfoUpdate) {
+                jobDetails.productInfoUpdate = mongoJob.productInfoUpdate;
+                console.log('[AssignmentDetails] ✓ Merged productInfoUpdate from MongoDB:', mongoJob.productInfoUpdate);
+              }
+            } catch (mongoErr: any) {
+              console.error('[AssignmentDetails] ✗ Failed to fetch productInfoUpdate from MongoDB:', mongoErr.message);
+            }
           }
         } catch (jobErr: any) {
           console.error('[AssignmentDetails] ✗ Failed to fetch job details:', jobErr.message);
