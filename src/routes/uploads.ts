@@ -64,12 +64,11 @@ async function handleImageUpload(req: Request, res: any) {
 
     return res.status(201).json({
       success: true,
+      message: 'Image uploaded successfully',
+      url, // Top-level url for client compatibility
       data: {
-        bucket: BUCKET,
-        key,
-        url,
-        contentType,
-        size: req.file.size,
+        url, // Also in data.url
+        imageUrl: url, // Alternative field name
       },
     });
   } catch (err: any) {
@@ -81,17 +80,27 @@ async function handleImageUpload(req: Request, res: any) {
 // Accepts multipart/form-data with field "file" or "photo"; uploads to S3 and returns public URL
 // No authentication required
 uploadsRouter.post('/image', (req, res, next) => {
-  // Try 'photo' field first, then fall back to 'file'
-  const photoUpload = upload.single('photo');
-  photoUpload(req, res, (err) => {
-    if (err || req.file) {
-      // Either got the file or got an error
-      return handleImageUpload(req, res);
+  // Use multer's any() to accept any field name, then validate
+  const anyUpload = upload.any();
+  anyUpload(req, res, async (err) => {
+    if (err) {
+      console.error('[Upload] Multer error:', err);
+      return res.status(400).json({ success: false, message: err.message });
     }
-    // No 'photo' field, try 'file' field
-    const fileUpload = upload.single('file');
-    fileUpload(req, res, (err2) => {
-      return handleImageUpload(req, res);
-    });
+    
+    // Check if we got files
+    const files = (req as any).files as Express.Multer.File[];
+    console.log('[Upload] Received files:', files?.length || 0);
+    
+    if (!files || files.length === 0) {
+      console.error('[Upload] No files received');
+      return res.status(400).json({ success: false, message: 'file is required' });
+    }
+    
+    // Take the first file and attach it as req.file
+    (req as any).file = files[0];
+    console.log('[Upload] Processing file:', files[0].originalname, 'Field:', files[0].fieldname);
+    
+    return handleImageUpload(req, res);
   });
 });
