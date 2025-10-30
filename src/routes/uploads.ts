@@ -24,6 +24,7 @@ const upload = multer({
 // S3 client
 const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const BUCKET = process.env.S3_BUCKET || 'sears-1099';
+const CLOUDFRONT_URL = process.env.CLOUDFRONT_URL || 'https://d1kq8vno1fudyz.cloudfront.net';
 const s3 = new S3Client({
   region: REGION,
   credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
@@ -60,7 +61,8 @@ uploadsRouter.post('/image', upload.single('file'), async (req: Request, res) =>
     });
     await s3.send(put);
 
-    const url = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
+    // Use CloudFront URL instead of direct S3 URL
+    const url = `${CLOUDFRONT_URL}/${key}`;
 
     return res.status(201).json({
       success: true,
