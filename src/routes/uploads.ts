@@ -41,10 +41,8 @@ function buildKey(filename: string) {
   return `uploads/${yyyy}/${mm}/${dd}/${randomUUID()}.${ext}`;
 }
 
-// POST /api/uploads/image
-// Accepts multipart/form-data with field "file"; uploads to S3 and returns public URL
-// No authentication required
-uploadsRouter.post('/image', upload.single('file'), async (req: Request, res) => {
+// Helper function to handle image upload
+async function handleImageUpload(req: Request, res: any) {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'file is required' });
 
@@ -77,4 +75,23 @@ uploadsRouter.post('/image', upload.single('file'), async (req: Request, res) =>
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to upload image' });
   }
+}
+
+// POST /api/uploads/image
+// Accepts multipart/form-data with field "file" or "photo"; uploads to S3 and returns public URL
+// No authentication required
+uploadsRouter.post('/image', (req, res, next) => {
+  // Try 'photo' field first, then fall back to 'file'
+  const photoUpload = upload.single('photo');
+  photoUpload(req, res, (err) => {
+    if (err || req.file) {
+      // Either got the file or got an error
+      return handleImageUpload(req, res);
+    }
+    // No 'photo' field, try 'file' field
+    const fileUpload = upload.single('file');
+    fileUpload(req, res, (err2) => {
+      return handleImageUpload(req, res);
+    });
+  });
 });
