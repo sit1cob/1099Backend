@@ -15,6 +15,7 @@ import { partsRouter } from './routes/parts';
 import { uploadsRouter } from './routes/uploads';
 import { logsRouter } from './routes/logs';
 import textractRouter from './routes/textract';
+import { feedbackRouter } from './routes/feedback';
 import axios from 'axios';
 
 const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'https://shs-1099-job-board.replit.app';
@@ -46,6 +47,7 @@ async function main() {
   app.use('/api/users', usersRouter);
   app.use('/api/logs', logsRouter);
   app.use('/api/textract', textractRouter);
+  app.use('/api/feedback', feedbackRouter);
 
   // Photo proxy route - mirrors external API structure
   app.get('/uploads/photos/*', async (req, res) => {
