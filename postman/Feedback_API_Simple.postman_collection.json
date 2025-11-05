@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Feedback API - Essential",
-    "description": "3 essential endpoints: Login, Get Config, Submit Feedback",
+    "name": "Feedback API - Complete",
+    "description": "Complete feedback API: Login, Config Management, Submit & Get Feedback",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -69,6 +69,101 @@
           "path": ["api", "feedback", "submit"]
         },
         "description": "Submit feedback (userId auto-extracted from token)"
+      }
+    },
+    {
+      "name": "4. Get All Feedback",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/feedback?limit=50",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "50",
+              "description": "Maximum number of feedback entries"
+            }
+          ]
+        },
+        "description": "Get all feedback submissions"
+      }
+    },
+    {
+      "name": "5. Add Question to Config",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"q3\",\n  \"question\": \"Would you recommend this app to others?\",\n  \"type\": \"rating\",\n  \"required\": true,\n  \"order\": 3\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config/question",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config", "question"]
+        },
+        "description": "Add a new question to feedback config. Types: rating, text, boolean, multiple_choice"
+      }
+    },
+    {
+      "name": "6. Update Question",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"How likely are you to recommend this app?\",\n  \"type\": \"rating\",\n  \"required\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config/question/q3",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config", "question", "q3"]
+        },
+        "description": "Update an existing question by ID"
+      }
+    },
+    {
+      "name": "7. Delete Question",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config/question/q3",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config", "question", "q3"]
+        },
+        "description": "Delete a question from config by ID"
       }
     }
   ],
