@@ -16,9 +16,11 @@ export function authenticateJWT(options?: { skipValidation?: boolean }) {
       // If skipValidation is true, just decode without verifying
       if (options?.skipValidation) {
         const decoded = jwt.decode(token) as JwtPayload;
-        if (!decoded || !decoded.userId) {
+        console.log('[Auth] Decoded token:', JSON.stringify(decoded));
+        if (!decoded) {
           return res.status(401).json({ success: false, message: 'Invalid token format' });
         }
+        // Don't check for userId here - let the route handle it
         req.user = decoded;
         next();
       } else {

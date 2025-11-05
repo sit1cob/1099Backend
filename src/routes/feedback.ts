@@ -76,8 +76,19 @@ feedbackRouter.post('/submit', authenticateJWT({ skipValidation: true }), async 
     const userIdString = req.user!.userId;
     console.log('[Feedback SUBMIT] User ID from token:', userIdString, 'Type:', typeof userIdString);
     
-    const userId = new mongoose.Types.ObjectId(userIdString);
-    console.log('[Feedback SUBMIT] Converted to ObjectId:', userId.toString());
+    if (!userIdString) {
+      console.error('[Feedback SUBMIT] No userId in token!');
+      return res.status(400).json({ success: false, message: 'No userId found in token' });
+    }
+    
+    let userId;
+    try {
+      userId = new mongoose.Types.ObjectId(userIdString);
+      console.log('[Feedback SUBMIT] Converted to ObjectId:', userId.toString());
+    } catch (error) {
+      console.error('[Feedback SUBMIT] Failed to convert userId to ObjectId:', error);
+      return res.status(400).json({ success: false, message: 'Invalid userId format in token' });
+    }
 
     // Create feedback document
     const feedback = new FeedbackModel({
@@ -107,43 +118,17 @@ feedbackRouter.post('/submit', authenticateJWT({ skipValidation: true }), async 
 });
 
 // GET /api/feedback
-// Get all feedback submissions (admin) or user's own feedback
-// Query params: limit (default: 100), userId (admin only)
+// Get all feedback submissions
+// Query params: limit (default: 100)
 feedbackRouter.get('/', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
-    const filterUserId = req.query.userId as string;
-    const userRole = req.user!.role;
-    const currentUserId = req.user!.userId;
 
-    console.log('[Feedback GET] User role:', userRole, 'Current userId:', currentUserId, 'Filter userId:', filterUserId);
+    console.log('[Feedback GET] Fetching all feedback, limit:', limit);
 
-    // Build query based on role
-    let query: any = {};
-    
-    if (userRole === 'admin' && filterUserId) {
-      // Admin can filter by specific userId - convert to ObjectId if valid
-      try {
-        query.userId = new mongoose.Types.ObjectId(filterUserId);
-      } catch (e) {
-        console.log('[Feedback GET] Invalid filterUserId format:', filterUserId);
-        return res.status(400).json({ success: false, message: 'Invalid userId format' });
-      }
-    } else if (userRole !== 'admin') {
-      // Regular users can only see their own feedback - convert to ObjectId if valid
-      try {
-        query.userId = new mongoose.Types.ObjectId(currentUserId);
-      } catch (e) {
-        console.log('[Feedback GET] Invalid currentUserId format:', currentUserId);
-        return res.status(400).json({ success: false, message: 'Invalid userId in token' });
-      }
-    }
-    // If admin and no filterUserId, show all feedback (empty query)
-
-    console.log('[Feedback GET] Query:', JSON.stringify(query));
-
+    // Return all feedback - no userId filtering
     const feedbacks = await FeedbackModel
-      .find(query)
+      .find({})
       .sort({ submittedAt: -1 })
       .limit(limit)
       .populate('userId', 'username email')
