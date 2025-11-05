@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { FeedbackModel } from '../models/feedback';
+import mongoose from 'mongoose';
 
 export const feedbackRouter = Router();
 
@@ -71,8 +72,9 @@ feedbackRouter.post('/submit', authenticateJWT({ skipValidation: true }), async 
       }
     }
 
-    // Get userId from authenticated request
-    const userId = req.user!.userId;
+    // Get userId from authenticated request and convert to ObjectId
+    const userIdString = req.user!.userId;
+    const userId = new mongoose.Types.ObjectId(userIdString);
 
     // Create feedback document
     const feedback = new FeedbackModel({
