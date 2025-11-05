@@ -6,7 +6,7 @@ export const feedbackRouter = Router();
 
 // GET /api/feedback/config
 // Returns the feedback survey configuration
-feedbackRouter.get('/config', authenticateJWT(), async (req: AuthenticatedRequest, res) => {
+feedbackRouter.get('/config', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
   try {
     const config = {
       title: "User Feedback Survey",
@@ -33,7 +33,7 @@ feedbackRouter.get('/config', authenticateJWT(), async (req: AuthenticatedReques
 // POST /api/feedback/submit
 // Submits user feedback
 // Body: { metadata: {...}, answers: [...] }
-feedbackRouter.post('/submit', authenticateJWT(), async (req: AuthenticatedRequest, res) => {
+feedbackRouter.post('/submit', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
   try {
     const { metadata, answers } = req.body || {};
 
@@ -103,7 +103,7 @@ feedbackRouter.post('/submit', authenticateJWT(), async (req: AuthenticatedReque
 // GET /api/feedback
 // Get all feedback submissions (admin) or user's own feedback
 // Query params: limit (default: 100), userId (admin only)
-feedbackRouter.get('/', authenticateJWT(), async (req: AuthenticatedRequest, res) => {
+feedbackRouter.get('/', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
     const filterUserId = req.query.userId as string;
