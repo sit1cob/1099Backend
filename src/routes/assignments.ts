@@ -6,6 +6,22 @@ import { JobModel } from '../models/job';
 import { OrderModel } from '../models/order';
 import { PartModel } from '../models/part';
 import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
+import multer from 'multer';
+import FormData from 'form-data';
+import axios from 'axios';
+
+// Configure multer for memory storage
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    return cb(new Error('Only image files are allowed'));
+  },
+});
 
 export const assignmentsRouter = Router();
 
@@ -176,6 +192,258 @@ assignmentsRouter.patch('/:id', async (req: AuthenticatedRequest, res) => {
   } catch (err: any) {
     console.error('[UpdateAssignment] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
+  }
+});
+
+// POST /api/assignments/:jobId/photo-upload-tokens - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+// Accepts: files metadata + optional part data (brand, partNumber, etc.)
+assignmentsRouter.post('/:jobId/photo-upload-tokens', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { jobId } = req.params;
+    console.log('[PhotoUploadTokens] ========================================');
+    console.log('[PhotoUploadTokens] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${jobId}/photo-upload-tokens`);
+    console.log('[PhotoUploadTokens] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[PhotoUploadTokens] ========================================');
+
+    // Get the token from request headers - no validation, just pass through
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Pass the entire request body to external API (includes files + optional part data)
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${jobId}/photo-upload-tokens`,
+        token,
+        'POST',
+        req.body
+      );
+      
+      console.log('[PhotoUploadTokens] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[PhotoUploadTokens] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[PhotoUploadTokens] ================================================');
+
+      // Transform the response to include S3 URLs
+      if (externalResponse.success && externalResponse.data?.tokens) {
+        const transformedTokens = externalResponse.data.tokens.map((tokenData: any) => {
+          const { uploadUrl, uploadFields } = tokenData;
+          
+          // Build the S3 URL
+          const baseUrl = uploadUrl.endsWith('/') ? uploadUrl.slice(0, -1) : uploadUrl;
+          const key = uploadFields.key;
+          
+          // Simple S3 URL (the signature from external API is for POST/upload, not GET/view)
+          const s3Url = `${baseUrl}/${key}`;
+          
+          return {
+            ...tokenData,
+            url: s3Url,           // Simple S3 URL (may need public bucket)
+            imageUrl: s3Url,      // Same as url
+            photoToken: tokenData.token // Include photoToken for easy access
+          };
+        });
+
+        externalResponse.data.tokens = transformedTokens;
+        console.log('[PhotoUploadTokens] ✓ Added S3 URLs to tokens');
+      }
+
+      console.log('[PhotoUploadTokens] ✓ Returning transformed response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[PhotoUploadTokens] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[PhotoUploadTokens] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to get photo upload tokens' });
+  }
+});
+
+// GET /api/assignments/:jobId/photos/:photoToken/view-url - Get signed view URL for uploaded photo
+// This must be defined BEFORE the authenticateJWT() middleware
+assignmentsRouter.get('/:jobId/photos/:photoToken/view-url', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { jobId, photoToken } = req.params;
+    
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No authorization token provided' });
+    }
+
+    try {
+      // Call external API to get view URL (if such endpoint exists)
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${jobId}/photos/${photoToken}/view-url`,
+        token,
+        'GET'
+      );
+      
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[PhotoViewUrl] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'Failed to get view URL' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[PhotoViewUrl] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to get view URL' });
+  }
+});
+
+// POST /api/assignments/:jobId/upload-photos - Complete photo upload with actual files
+// This must be defined BEFORE the authenticateJWT() middleware
+// NO MONGO VALIDATION - just passes token to external API
+assignmentsRouter.post('/:jobId/upload-photos', upload.array('photos', 10), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { jobId } = req.params;
+    const files = (req as any).files as Express.Multer.File[];
+    
+    console.log('[UploadPhotos] ========================================');
+    console.log('[UploadPhotos] Job ID:', jobId);
+    console.log('[UploadPhotos] Files received:', files?.length || 0);
+    console.log('[UploadPhotos] ========================================');
+
+    // Get the token from request headers - no validation, just pass through
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
+
+    if (!token) {
+      console.log('[UploadPhotos] ✗ No authorization token provided');
+      return res.status(401).json({ success: false, message: 'No authorization token provided' });
+    }
+
+    if (!files || files.length === 0) {
+      console.log('[UploadPhotos] ✗ No files uploaded');
+      return res.status(400).json({ success: false, message: 'No photos provided' });
+    }
+
+    console.log('[UploadPhotos] Token received (first 20 chars):', token.substring(0, 20) + '...');
+
+    try {
+      // Step 1: Get upload tokens from external API
+      const filesMetadata = files.map(file => ({
+        fileName: file.originalname,
+        mimeType: file.mimetype
+      }));
+
+      const tokensResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${jobId}/photo-upload-tokens`,
+        token,
+        'POST',
+        { files: filesMetadata }
+      );
+      
+      console.log('[UploadPhotos] ✓ Got upload tokens:', tokensResponse.data?.tokens?.length || 0);
+
+      if (!tokensResponse.success || !tokensResponse.data?.tokens) {
+        throw new Error('Failed to get upload tokens');
+      }
+
+      // Step 2: Upload each file to S3
+      const uploadResults = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const tokenData = tokensResponse.data.tokens[i];
+        
+        if (!tokenData) {
+          console.error('[UploadPhotos] No token for file:', file.originalname);
+          continue;
+        }
+
+        const { uploadUrl, uploadFields } = tokenData;
+        
+        // Create form data for S3 upload
+        const formData = new FormData();
+        
+        // Add all upload fields in the correct order
+        Object.keys(uploadFields).forEach(key => {
+          formData.append(key, uploadFields[key]);
+        });
+        
+        // Add the file last
+        formData.append('file', file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+
+        try {
+          // Upload to S3
+          await axios.post(uploadUrl, formData, {
+            headers: formData.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+          });
+
+          // Build the URLs
+          const baseUrl = uploadUrl.endsWith('/') ? uploadUrl.slice(0, -1) : uploadUrl;
+          const key = uploadFields.key;
+          
+          // Simple S3 URL (permanent, but may require bucket permissions)
+          const s3Url = `${baseUrl}/${key}`;
+          
+          // Note: The signature from external API is for POST (upload), not GET (view)
+          // We return the S3 URL and the token - client should use token to get proper view URL
+          // Or the bucket needs to be public for direct access
+
+          uploadResults.push({
+            fileName: file.originalname,
+            token: tokenData.token,
+            url: s3Url,           // Simple S3 URL (may need public bucket or proper GET signature)
+            imageUrl: s3Url,      // Same as url
+            photoToken: tokenData.token, // Token that can be used with external API
+            success: true
+          });
+
+          console.log('[UploadPhotos] ✓ Uploaded:', file.originalname);
+          console.log('[UploadPhotos]   S3 URL:', s3Url);
+          console.log('[UploadPhotos]   Token:', tokenData.token);
+        } catch (uploadErr: any) {
+          console.error('[UploadPhotos] ✗ Failed to upload:', file.originalname, uploadErr.message);
+          uploadResults.push({
+            fileName: file.originalname,
+            success: false,
+            error: uploadErr.message
+          });
+        }
+      }
+
+      console.log('[UploadPhotos] ✓ Upload complete. Success:', uploadResults.filter(r => r.success).length, 'Failed:', uploadResults.filter(r => !r.success).length);
+
+      return res.json({
+        success: true,
+        message: `Uploaded ${uploadResults.filter(r => r.success).length} of ${files.length} photos`,
+        data: {
+          uploads: uploadResults,
+          totalFiles: files.length,
+          successCount: uploadResults.filter(r => r.success).length,
+          failureCount: uploadResults.filter(r => !r.success).length
+        }
+      });
+    } catch (extErr: any) {
+      console.error('[UploadPhotos] ✗ External API call failed:', extErr.message);
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'Failed to upload photos' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[UploadPhotos] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to upload photos' });
   }
 });
 
