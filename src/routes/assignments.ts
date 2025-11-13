@@ -146,28 +146,28 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// PATCH /api/assignments/:id - NO AUTH (proxies to external API)
+// PATCH /api/assignments/:id - NO AUTH (proxies to external API v2)
 // This must be defined BEFORE the authenticateJWT() middleware
 assignmentsRouter.patch('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[UpdateAssignment] ========================================');
-    console.log('[UpdateAssignment] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${id}`);
+    console.log('[UpdateAssignment] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/v2/assignments/${id}`);
     console.log('[UpdateAssignment] Body:', JSON.stringify(req.body, null, 2));
     console.log('[UpdateAssignment] ========================================');
 
-    // Get the token from request headers
+    // Get the token from request headers - no validation, just pass through
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
 
     if (!token) {
       return res.status(401).json({ success: false, message: 'No token provided' });
     }
 
     try {
-      // Call external API
+      // Call external API v2 endpoint (supports serviceAttemptType field)
       const externalResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/assignments/${id}`,
+        `/api/v2/assignments/${id}`,
         token,
         'PATCH',
         req.body
@@ -574,29 +574,29 @@ assignmentsRouter.post('/:id/schedule', async (req: AuthenticatedRequest, res) =
   return handleRescheduleAssignment(req, res, 'POST');
 });
 
-// POST /api/assignments/:id - NO AUTH (proxies to external API)
+// POST /api/assignments/:id - NO AUTH (proxies to external API v2)
 // This is an alias for PATCH - Android app uses POST instead of PATCH
 // This must be defined BEFORE the authenticateJWT() middleware
 assignmentsRouter.post('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[UpdateAssignment-POST] ========================================');
-    console.log('[UpdateAssignment-POST] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${id}`);
+    console.log('[UpdateAssignment-POST] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/v2/assignments/${id}`);
     console.log('[UpdateAssignment-POST] Body:', JSON.stringify(req.body, null, 2));
     console.log('[UpdateAssignment-POST] ========================================');
 
-    // Get the token from request headers
+    // Get the token from request headers - no validation, just pass through
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
 
     if (!token) {
       return res.status(401).json({ success: false, message: 'No token provided' });
     }
 
     try {
-      // Call external API using PATCH (external API requires PATCH, not POST)
+      // Call external API v2 using PATCH (supports serviceAttemptType field)
       const externalResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/assignments/${id}`,
+        `/api/v2/assignments/${id}`,
         token,
         'PATCH',
         req.body
