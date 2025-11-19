@@ -195,14 +195,15 @@ assignmentsRouter.patch('/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// POST /api/assignments/:jobId/photo-upload-tokens - NO AUTH (proxies to external API)
+// POST /api/assignments/:assignmentId/photo-upload-tokens - NO AUTH (proxies to external API)
 // This must be defined BEFORE the authenticateJWT() middleware
 // Accepts: files metadata + optional part data (brand, partNumber, etc.)
-assignmentsRouter.post('/:jobId/photo-upload-tokens', async (req: AuthenticatedRequest, res) => {
+// Note: The parameter is an assignment ID, not a job ID
+assignmentsRouter.post('/:assignmentId/photo-upload-tokens', async (req: AuthenticatedRequest, res) => {
   try {
-    const { jobId } = req.params;
+    const { assignmentId } = req.params;
     console.log('[PhotoUploadTokens] ========================================');
-    console.log('[PhotoUploadTokens] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${jobId}/photo-upload-tokens`);
+    console.log('[PhotoUploadTokens] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${assignmentId}/photo-upload-tokens`);
     console.log('[PhotoUploadTokens] Body:', JSON.stringify(req.body, null, 2));
     console.log('[PhotoUploadTokens] ========================================');
 
@@ -217,7 +218,7 @@ assignmentsRouter.post('/:jobId/photo-upload-tokens', async (req: AuthenticatedR
     try {
       // Pass the entire request body to external API (includes files + optional part data)
       const externalResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/assignments/${jobId}/photo-upload-tokens`,
+        `/api/assignments/${assignmentId}/photo-upload-tokens`,
         token,
         'POST',
         req.body
@@ -268,11 +269,11 @@ assignmentsRouter.post('/:jobId/photo-upload-tokens', async (req: AuthenticatedR
   }
 });
 
-// GET /api/assignments/:jobId/photos/:photoToken/view-url - Get signed view URL for uploaded photo
+// GET /api/assignments/:assignmentId/photos/:photoToken/view-url - Get signed view URL for uploaded photo
 // This must be defined BEFORE the authenticateJWT() middleware
-assignmentsRouter.get('/:jobId/photos/:photoToken/view-url', async (req: AuthenticatedRequest, res) => {
+assignmentsRouter.get('/:assignmentId/photos/:photoToken/view-url', async (req: AuthenticatedRequest, res) => {
   try {
-    const { jobId, photoToken } = req.params;
+    const { assignmentId, photoToken } = req.params;
     
     // Get the token from request headers
     const authHeader = req.headers.authorization;
@@ -285,7 +286,7 @@ assignmentsRouter.get('/:jobId/photos/:photoToken/view-url', async (req: Authent
     try {
       // Call external API to get view URL (if such endpoint exists)
       const externalResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/assignments/${jobId}/photos/${photoToken}/view-url`,
+        `/api/assignments/${assignmentId}/photos/${photoToken}/view-url`,
         token,
         'GET'
       );
@@ -304,16 +305,16 @@ assignmentsRouter.get('/:jobId/photos/:photoToken/view-url', async (req: Authent
   }
 });
 
-// POST /api/assignments/:jobId/upload-photos - Complete photo upload with actual files
+// POST /api/assignments/:assignmentId/upload-photos - Complete photo upload with actual files
 // This must be defined BEFORE the authenticateJWT() middleware
 // NO MONGO VALIDATION - just passes token to external API
-assignmentsRouter.post('/:jobId/upload-photos', upload.array('photos', 10), async (req: AuthenticatedRequest, res) => {
+assignmentsRouter.post('/:assignmentId/upload-photos', upload.array('photos', 10), async (req: AuthenticatedRequest, res) => {
   try {
-    const { jobId } = req.params;
+    const { assignmentId } = req.params;
     const files = (req as any).files as Express.Multer.File[];
     
     console.log('[UploadPhotos] ========================================');
-    console.log('[UploadPhotos] Job ID:', jobId);
+    console.log('[UploadPhotos] Assignment ID:', assignmentId);
     console.log('[UploadPhotos] Files received:', files?.length || 0);
     console.log('[UploadPhotos] ========================================');
 
@@ -341,7 +342,7 @@ assignmentsRouter.post('/:jobId/upload-photos', upload.array('photos', 10), asyn
       }));
 
       const tokensResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/assignments/${jobId}/photo-upload-tokens`,
+        `/api/assignments/${assignmentId}/photo-upload-tokens`,
         token,
         'POST',
         { files: filesMetadata }
