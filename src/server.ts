@@ -16,7 +16,9 @@ import { uploadsRouter } from './routes/uploads';
 import { logsRouter } from './routes/logs';
 import textractRouter from './routes/textract';
 import { feedbackRouter } from './routes/feedback';
+import { analyticsRouter } from './routes/analytics';
 import axios from 'axios';
+import { apiAnalyticsLogger } from './middleware/apiAnalytics';
 
 const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'https://shs-1099-job-board.replit.app';
 
@@ -33,6 +35,7 @@ async function main() {
   app.use(morgan('dev'));
   app.use(express.json());
   app.use(cookieParser());
+  app.use(apiAnalyticsLogger);
 
   app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'job-board-mongo-api' });
@@ -48,6 +51,7 @@ async function main() {
   app.use('/api/logs', logsRouter);
   app.use('/api/textract', textractRouter);
   app.use('/api/feedback', feedbackRouter);
+  app.use('/api/analytics', analyticsRouter);
 
   // Photo proxy route - mirrors external API structure
   app.get('/uploads/photos/*', async (req, res) => {
