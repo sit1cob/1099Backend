@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "stag": "analytics-e1ab3",
+    "default": "analytics-e1ab3"
+  },
+  "targets": {},
+  "etags": {}
+}

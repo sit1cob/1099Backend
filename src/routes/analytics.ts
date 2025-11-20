@@ -4,7 +4,9 @@ import { type AuthenticatedRequest } from '../middleware/auth';
 
 type QueryParams = {
   limit?: string;
+  page?: string;
   method?: string;
+  route?: string;
   success?: 'success' | 'failed';
   userId?: string;
   search?: string;
@@ -24,6 +26,11 @@ function buildFilters(query: QueryParams) {
   ];
 
   if (query.method) filter.method = query.method.toUpperCase();
+  if (query.route) {
+    // Filter by URL path (since route field is often null)
+    // Match URLs that start with the selected route
+    filter.url = new RegExp(`^${query.route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\?|$)`);
+  }
   if (query.userId) filter.userId = query.userId;
   if (query.success === 'success') filter.success = true;
   if (query.success === 'failed') filter.success = false;
@@ -62,12 +69,15 @@ function buildFilters(query: QueryParams) {
 analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const query = req.query as QueryParams;
-    const limit = Math.min(Number(query.limit) || 100, MAX_LIMIT);
+    const limit = Math.min(Number(query.limit) || 50, MAX_LIMIT);
+    const page = Math.max(Number(query.page) || 1, 1);
+    const skip = (page - 1) * limit;
     const filters = buildFilters(query);
 
     const [records, total] = await Promise.all([
       ApiAnalyticsModel.find(filters)
         .sort({ createdAt: -1 })
+        .skip(skip)
         .limit(limit)
         .lean(),
       ApiAnalyticsModel.countDocuments(filters),
@@ -77,6 +87,9 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
       success: true,
       data: records,
       total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   } catch (err: any) {
     console.error('[Analytics] Failed to load logs:', err);
@@ -129,8 +142,8 @@ analyticsRouter.get('/summary', async (req: AuthenticatedRequest, res) => {
           successRate,
           avgLatency: totals.avgLatency || 0,
         },
-        byMethod: Object.fromEntries(byMethod.map((item) => [item._id, item.count])),
-        byStatus: Object.fromEntries(byStatus.map((item) => [item._id, item.count])),
+        byMethod: Object.fromEntries(byMethod.map((item: any) => [item._id, item.count])),
+        byStatus: Object.fromEntries(byStatus.map((item: any) => [item._id, item.count])),
       },
     });
   } catch (err: any) {
@@ -147,6 +160,39 @@ function escapeCsvField(value: any): string {
   }
   return str;
 }
+
+analyticsRouter.get('/routes', async (req: AuthenticatedRequest, res) => {
+  try {
+    // Get distinct URLs (not routes, since route field is often null)
+    const urls = await ApiAnalyticsModel.distinct('url', {
+      url: { $not: EXCLUDE_URL_REGEX },
+    });
+
+    // Extract base paths (remove query strings and normalize)
+    const routeSet = new Set<string>();
+    urls.forEach((url: string) => {
+      if (!url) return;
+      // Remove query string
+      const path = url.split('?')[0];
+      // Normalize path (remove trailing slashes)
+      const normalized = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path;
+      if (normalized && normalized.trim().length > 0) {
+        routeSet.add(normalized);
+      }
+    });
+
+    // Convert to array and sort
+    const validRoutes = Array.from(routeSet).sort();
+
+    return res.json({
+      success: true,
+      data: validRoutes,
+    });
+  } catch (err: any) {
+    console.error('[Analytics] Failed to load routes:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to load routes' });
+  }
+});
 
 analyticsRouter.get('/export', async (req: AuthenticatedRequest, res) => {
   try {

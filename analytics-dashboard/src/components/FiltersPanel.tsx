@@ -1,5 +1,7 @@
 import { format } from 'date-fns';
+import { useEffect, useState } from 'react';
 import type { AnalyticsFilter } from '../types';
+import { fetchUniqueRoutes } from '../services/api';
 
 type FiltersPanelProps = {
   value: AnalyticsFilter;
@@ -9,12 +11,20 @@ type FiltersPanelProps = {
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
 export function FiltersPanel({ value, onChange }: FiltersPanelProps) {
+  const [routes, setRoutes] = useState<string[]>([]);
+  
+  useEffect(() => {
+    fetchUniqueRoutes()
+      .then((res) => setRoutes(res.data))
+      .catch((err) => console.error('Failed to load routes:', err));
+  }, []);
+  
   const handleChange = (patch: Partial<AnalyticsFilter>) => {
     onChange({ ...value, ...patch });
   };
 
   return (
-    <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-5">
+    <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-6">
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-slate-500">Search</label>
         <input
@@ -34,6 +44,21 @@ export function FiltersPanel({ value, onChange }: FiltersPanelProps) {
           value={value.userId ?? ''}
           onChange={(e) => handleChange({ userId: e.target.value || undefined })}
         />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-slate-500">Route</label>
+        <select
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          value={value.route ?? ''}
+          onChange={(e) => handleChange({ route: e.target.value || undefined })}
+        >
+          <option value="">All Routes</option>
+          {routes.map((route) => (
+            <option key={route} value={route}>
+              {route}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-slate-500">Method</label>

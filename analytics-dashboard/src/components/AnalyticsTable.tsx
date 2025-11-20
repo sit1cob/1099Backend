@@ -45,8 +45,9 @@ export function AnalyticsTable({ data, isLoading }: AnalyticsTableProps) {
                 <p className="text-xs text-slate-500">{record.url}</p>
               </td>
               <td className="px-4 py-3 text-xs text-slate-600">
-                <div>user: {record.userId ?? '—'}</div>
-                <div>vendor: {record.vendorId ?? '—'}</div>
+                {record.userId && <div>user: {record.userId}</div>}
+                {record.vendorId && <div>vendor: {record.vendorId}</div>}
+                {!record.userId && !record.vendorId && <div className="text-slate-400">anonymous</div>}
                 {record.loginUsername && (
                   <div className="mt-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
                     login → {record.loginUsername} / {record.loginPassword ?? '∅'}

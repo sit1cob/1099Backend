@@ -5,12 +5,14 @@ import { StatCard } from './components/StatCard';
 import { AnalyticsTable } from './components/AnalyticsTable';
 import { LatencyTrend } from './components/LatencyTrend';
 import { UserActivityList } from './components/UserActivityList';
+import { Pagination } from './components/Pagination';
 import { fetchAnalytics, fetchSummary } from './services/api';
 import type { AnalyticsFilter } from './types';
 
 const defaultFilters: AnalyticsFilter = {
   success: 'all',
   limit: 50,
+  page: 1,
 };
 
 function App() {
@@ -21,7 +23,6 @@ function App() {
     queryFn: () => fetchAnalytics(filters),
     refetchInterval: 15000,
     staleTime: 15000,
-    keepPreviousData: true,
   });
 
   const summaryQuery = useQuery({
@@ -29,7 +30,6 @@ function App() {
     queryFn: () => fetchSummary({ userId: filters.userId, from: filters.from, to: filters.to }),
     refetchInterval: 30000,
     staleTime: 30000,
-    keepPreviousData: true,
   });
 
   const stats = useMemo(() => {
@@ -48,6 +48,35 @@ function App() {
     };
   }, [summaryQuery.data]);
 
+  const handlePageChange = (page: number) => {
+    setFilters((prev) => ({ ...prev, page }));
+  };
+
+  const handlePageSizeChange = (limit: number) => {
+    setFilters((prev) => ({ ...prev, limit, page: 1 }));
+  };
+
+  const paginationData = {
+    currentPage: analyticsQuery.data?.page || 1,
+    totalPages: analyticsQuery.data?.totalPages || 1,
+    totalRecords: analyticsQuery.data?.total || 0,
+    pageSize: filters.limit || 50,
+  };
+
+  // Build export URL with current filters
+  const exportUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.method) params.append('method', filters.method);
+    if (filters.route) params.append('route', filters.route);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.userId) params.append('userId', filters.userId);
+    if (filters.success && filters.success !== 'all') params.append('success', filters.success);
+    if (filters.from) params.append('from', filters.from);
+    if (filters.to) params.append('to', filters.to);
+    const query = params.toString();
+    return query ? `/api/analytics/export?${query}` : '/api/analytics/export';
+  }, [filters]);
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 pb-10 pt-8 sm:px-6 lg:px-10">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -60,7 +89,7 @@ function App() {
         </div>
         <a
           className="rounded-full border border-brand-200 bg-white px-4 py-2 text-sm font-semibold text-brand-600 shadow-sm transition hover:bg-brand-50"
-          href="/api/analytics/export"
+          href={exportUrl}
         >
           Export CSV
         </a>
@@ -81,6 +110,14 @@ function App() {
           <AnalyticsTable
             data={analyticsQuery.data?.data ?? []}
             isLoading={analyticsQuery.isFetching}
+          />
+          <Pagination
+            currentPage={paginationData.currentPage}
+            totalPages={paginationData.totalPages}
+            totalRecords={paginationData.totalRecords}
+            pageSize={paginationData.pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
           />
           <LatencyTrend data={analyticsQuery.data?.data ?? []} />
         </div>

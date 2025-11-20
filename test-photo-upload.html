@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Photo Upload API</title>
+</head>
+<body>
+    <h1>Test Photo Upload Tokens API</h1>
+    
+    <div>
+        <label>JWT Token:</label><br>
+        <input type="text" id="token" style="width: 500px" placeholder="Paste your JWT token here">
+    </div>
+    
+    <div style="margin-top: 10px;">
+        <label>Assignment ID:</label><br>
+        <input type="text" id="assignmentId" value="13048356">
+    </div>
+    
+    <div style="margin-top: 10px;">
+        <button onclick="testAPI()">Test API</button>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <h3>Response:</h3>
+        <pre id="response" style="background: #f0f0f0; padding: 10px; max-height: 400px; overflow: auto;"></pre>
+    </div>
+    
+    <script>
+        async function testAPI() {
+            const token = document.getElementById('token').value;
+            const assignmentId = document.getElementById('assignmentId').value;
+            const responseEl = document.getElementById('response');
+            
+            if (!token) {
+                responseEl.textContent = 'Please enter a JWT token';
+                return;
+            }
+            
+            responseEl.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(
+                    `https://shs-1099-job-board.replit.app/api/assignments/${assignmentId}/photo-upload-tokens`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            files: [{
+                                fileName: 'test-photo.png',
+                                mimeType: 'image/png'
+                            }]
+                        })
+                    }
+                );
+                
+                const data = await response.json();
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                
+                console.log('Full response:', data);
+                
+                if (data.success && data.data?.tokens) {
+                    console.log('Upload URL:', data.data.tokens[0].uploadUrl);
+                    console.log('Upload Fields:', data.data.tokens[0].uploadFields);
+                    console.log('Photo Token:', data.data.tokens[0].photoToken);
+                }
+                
+            } catch (error) {
+                responseEl.textContent = `Error: ${error.message}\n\n${error.stack}`;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

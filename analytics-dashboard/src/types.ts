@@ -28,16 +28,21 @@ export type ApiAnalyticsRecord = {
 export type AnalyticsFilter = {
   success?: 'all' | 'success' | 'failed';
   method?: string;
+  route?: string;
   search?: string;
   userId?: string;
   from?: string;
   to?: string;
   limit?: number;
+  page?: number;
 };
 
 export type AnalyticsResponse = {
   success: boolean;
   data: ApiAnalyticsRecord[];
   total: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
 };
 
