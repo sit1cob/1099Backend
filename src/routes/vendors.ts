@@ -159,7 +159,7 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
     try {
       // Call external API to get all necessary data
       const [availableJobsResponse, assignmentsResponse] = await Promise.all([
-        ExternalApiAdapter.callExternalApi('/api/vendors/me/jobs', token, 'GET'),
+        ExternalApiAdapter.callExternalApi('/api/jobs/available', token, 'GET'),
         ExternalApiAdapter.callExternalApi('/api/vendors/me/assignments', token, 'GET')
       ]);
       
@@ -197,7 +197,7 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
             myJobsCount,
             completedCount,
             inProgressCount: Array.isArray(assignments) 
-              ? assignments.filter((a: any) => ['assigned', 'arrived', 'in_progress'].includes(a.status)).length 
+              ? assignments.filter((a: any) => ['assigned', 'arrived', 'in_progress', 'waiting_on_parts', 'part_arrived'].includes(a.status)).length 
               : 0
           }
         }
