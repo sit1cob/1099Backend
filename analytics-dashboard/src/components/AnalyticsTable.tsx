@@ -34,6 +34,7 @@ export function AnalyticsTable({ data, isLoading }: AnalyticsTableProps) {
             <th className="px-4 py-3">Method</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Latency</th>
+            <th className="px-4 py-3">Request Body</th>
             <th className="px-4 py-3">When</th>
           </tr>
         </thead>
@@ -70,6 +71,20 @@ export function AnalyticsTable({ data, isLoading }: AnalyticsTableProps) {
                 </span>
               </td>
               <td className="px-4 py-3 text-sm text-slate-700">{record.elapsedMs ?? '—'} ms</td>
+              <td className="px-4 py-3 max-w-xs">
+                {record.requestBody && Object.keys(record.requestBody).length > 0 ? (
+                  <details className="cursor-pointer">
+                    <summary className="text-xs font-medium text-brand-600 hover:text-brand-700">
+                      View body ({Object.keys(record.requestBody).length} fields)
+                    </summary>
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-slate-50 p-2 text-[10px] text-slate-700">
+                      {JSON.stringify(record.requestBody, null, 2)}
+                    </pre>
+                  </details>
+                ) : (
+                  <span className="text-xs text-slate-400">—</span>
+                )}
+              </td>
               <td className="px-4 py-3 text-xs text-slate-600">
                 <div className="font-medium">{format(new Date(record.createdAt), 'MMM dd, yyyy')}</div>
                 <div className="text-slate-500">{format(new Date(record.createdAt), 'HH:mm:ss')}</div>
