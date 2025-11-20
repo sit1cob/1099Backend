@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import type { ApiAnalyticsRecord } from '../types';
 import clsx from 'clsx';
 
@@ -70,8 +70,9 @@ export function AnalyticsTable({ data, isLoading }: AnalyticsTableProps) {
                 </span>
               </td>
               <td className="px-4 py-3 text-sm text-slate-700">{record.elapsedMs ?? '—'} ms</td>
-              <td className="px-4 py-3 text-xs text-slate-500">
-                {formatDistanceToNow(new Date(record.createdAt), { addSuffix: true })}
+              <td className="px-4 py-3 text-xs text-slate-600">
+                <div className="font-medium">{format(new Date(record.createdAt), 'MMM dd, yyyy')}</div>
+                <div className="text-slate-500">{format(new Date(record.createdAt), 'HH:mm:ss')}</div>
               </td>
             </tr>
           ))}

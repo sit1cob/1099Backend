@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { AnalyticsFilter, AnalyticsResponse } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5010';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://app1099-api.searskairos.ai';
 
 const client = axios.create({
   baseURL: API_BASE_URL,

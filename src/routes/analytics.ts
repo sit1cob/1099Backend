@@ -16,6 +16,7 @@ type QueryParams = {
 
 const MAX_LIMIT = 500;
 const EXCLUDE_URL_REGEX = /\/api\/analytics/;
+const NON_API_ROUTES = ['/', '/favicon.ico', '/robots.txt', '/sitemap.xml'];
 
 export const analyticsRouter = Router();
 
@@ -23,6 +24,7 @@ function buildFilters(query: QueryParams) {
   const filter: Record<string, any> = {};
   const andConditions: any[] = [
     { url: { $not: EXCLUDE_URL_REGEX } },
+    { url: { $nin: NON_API_ROUTES } }, // Exclude non-API routes
   ];
 
   if (query.method) filter.method = query.method.toUpperCase();
@@ -176,7 +178,8 @@ analyticsRouter.get('/routes', async (req: AuthenticatedRequest, res) => {
       const path = url.split('?')[0];
       // Normalize path (remove trailing slashes)
       const normalized = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path;
-      if (normalized && normalized.trim().length > 0) {
+      // Only include API routes (starting with /api) and exclude root paths like /
+      if (normalized && normalized.trim().length > 0 && normalized.startsWith('/api')) {
         routeSet.add(normalized);
       }
     });
