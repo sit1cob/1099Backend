@@ -139,9 +139,82 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
       console.log('[JobsAvailable] ========== EXTERNAL API RESPONSE ==========');
       console.log('[JobsAvailable] Response:', JSON.stringify(externalResponse, null, 2));
       console.log('[JobsAvailable] ================================================');
-      console.log('[JobsAvailable] ✓ Returning external API response (success or failure)');
 
-      // Always return external API response (even if failed)
+      // Filter jobs to only include future dates (excluding today)
+      if (externalResponse && externalResponse.success) {
+        // Calculate start of tomorrow (midnight)
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        console.log('[JobsAvailable] Filtering jobs - only including jobs scheduled after:', tomorrow.toISOString());
+
+        // Helper function to filter jobs by scheduledDate
+        const filterFutureJobs = (jobs: any[]): any[] => {
+          return jobs.filter((job: any) => {
+            if (!job.scheduledDate) {
+              // If no scheduledDate, exclude the job
+              return false;
+            }
+
+            const scheduledDate = new Date(job.scheduledDate);
+            if (isNaN(scheduledDate.getTime())) {
+              // Invalid date, exclude
+              return false;
+            }
+
+            // Only include jobs scheduled strictly after today (tomorrow or later)
+            return scheduledDate >= tomorrow;
+          });
+        };
+
+        // Extract jobs array - handle different response structures
+        let jobs: any[] = [];
+        if (Array.isArray(externalResponse.data)) {
+          // Response structure: { success: true, data: [...] }
+          jobs = externalResponse.data;
+        } else if (externalResponse.data && Array.isArray(externalResponse.data.jobs)) {
+          // Response structure: { success: true, data: { jobs: [...] } }
+          jobs = externalResponse.data.jobs;
+        } else if (externalResponse.data && externalResponse.data.data && Array.isArray(externalResponse.data.data)) {
+          // Nested structure: { success: true, data: { data: [...] } }
+          jobs = externalResponse.data.data;
+        }
+
+        // Filter the jobs
+        const filteredJobs = filterFutureJobs(jobs);
+        
+        console.log('[JobsAvailable] Filtered jobs:', {
+          originalCount: jobs.length,
+          filteredCount: filteredJobs.length,
+          excludedCount: jobs.length - filteredJobs.length
+        });
+
+        // Reconstruct the response with filtered jobs, maintaining the original structure
+        if (Array.isArray(externalResponse.data)) {
+          // Replace the data array with filtered array
+          externalResponse.data = filteredJobs;
+        } else if (externalResponse.data && Array.isArray(externalResponse.data.jobs)) {
+          // Replace the jobs array
+          externalResponse.data.jobs = filteredJobs;
+          // Update pagination metadata if it exists
+          if (externalResponse.data.total !== undefined) {
+            externalResponse.data.total = filteredJobs.length;
+          }
+          if (externalResponse.data.count !== undefined) {
+            externalResponse.data.count = filteredJobs.length;
+          }
+        } else if (externalResponse.data && externalResponse.data.data && Array.isArray(externalResponse.data.data)) {
+          // Replace the nested data array
+          externalResponse.data.data = filteredJobs;
+        }
+
+        console.log('[JobsAvailable] ✓ Returning filtered response with future jobs only');
+      } else {
+        console.log('[JobsAvailable] Response not successful or no data to filter');
+      }
+
       return res.json(externalResponse);
     } catch (extErr: any) {
       console.error('[JobsAvailable] ✗ External API call failed:', extErr.message);
