@@ -210,6 +210,11 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
           externalResponse.data.data = filteredJobs;
         }
 
+        // Update the message to reflect the actual filtered count
+        if (externalResponse.message) {
+          externalResponse.message = `Found ${filteredJobs.length} available jobs`;
+        }
+
         console.log('[JobsAvailable] ✓ Returning filtered response with future jobs only');
       } else {
         console.log('[JobsAvailable] Response not successful or no data to filter');

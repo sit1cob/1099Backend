@@ -170,9 +170,23 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
 
       // Calculate statistics
       // Extract jobs array - check if data is already an array, otherwise look for data.jobs
-      const availableJobs = Array.isArray(availableJobsResponse?.data) 
+      let availableJobs = Array.isArray(availableJobsResponse?.data) 
         ? availableJobsResponse.data 
         : (availableJobsResponse?.data?.jobs || []);
+      
+      // Filter jobs to only include future dates (excluding today) - same logic as /api/jobs/available
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      availableJobs = availableJobs.filter((job: any) => {
+        if (!job.scheduledDate) return false;
+        const scheduledDate = new Date(job.scheduledDate);
+        if (isNaN(scheduledDate.getTime())) return false;
+        return scheduledDate >= tomorrow;
+      });
+      
       const assignments = assignmentsResponse?.data || [];
       
       const availableJobsCount = Array.isArray(availableJobs) ? availableJobs.length : 0;
