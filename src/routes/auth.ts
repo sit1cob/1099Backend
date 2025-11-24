@@ -515,7 +515,7 @@ authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
     const { assignmentId } = req.params;
     
     console.log('[AddAssignmentPart] ========================================');
-    console.log('[AddAssignmentPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/assignments/${assignmentId}/parts`);
+    console.log('[AddAssignmentPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${assignmentId}/parts`);
     console.log('[AddAssignmentPart] Assignment ID:', assignmentId);
     console.log('[AddAssignmentPart] Request body:', JSON.stringify(req.body, null, 2));
     console.log('[AddAssignmentPart] ========================================');
@@ -565,7 +565,7 @@ authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
       }
 
       const externalResponse = await ExternalApiAdapter.callExternalApi(
-        `/api/auth/vendor/assignments/${assignmentId}/parts`,
+        `/api/assignments/${assignmentId}/parts`,
         token,
         'POST',
         requestBody
