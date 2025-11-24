@@ -1,0 +1,483 @@
+{
+  "info": {
+    "name": "1099 Job Board - Photo Upload API",
+    "description": "Complete API collection for photo upload functionality including multipart uploads, token-based uploads, and parts management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5010",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assignmentId",
+      "value": "123",
+      "type": "string"
+    },
+    {
+      "key": "photoToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login Vendor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', response.data.accessToken);",
+                  "        console.log('Access token saved:', response.data.accessToken.substring(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"vendor@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login to get access token. Token is automatically saved to collection variables."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Photo Upload - Token Based (Direct S3)",
+      "item": [
+        {
+          "name": "1. Request Photo Upload Tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.tokens && response.data.tokens.length > 0) {",
+                  "        const firstToken = response.data.tokens[0];",
+                  "        pm.collectionVariables.set('photoToken', firstToken.token);",
+                  "        pm.collectionVariables.set('s3UploadUrl', firstToken.presignedPost?.url || firstToken.uploadUrl);",
+                  "        pm.collectionVariables.set('s3Key', firstToken.presignedPost?.fields?.key || firstToken.uploadFields?.key);",
+                  "        console.log('Photo token saved:', firstToken.token);",
+                  "        console.log('S3 Upload URL:', firstToken.presignedPost?.url || firstToken.uploadUrl);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"files\": [\n    {\n      \"fileName\": \"part_photo_1.jpg\",\n      \"mimeType\": \"image/jpeg\"\n    },\n    {\n      \"fileName\": \"part_photo_2.png\",\n      \"mimeType\": \"image/png\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/:assignmentId/photo-upload-tokens",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", ":assignmentId", "photo-upload-tokens"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                }
+              ]
+            },
+            "description": "Request presigned POST URLs for direct S3 upload. Returns tokens and S3 credentials.\n\nResponse includes:\n- token: UUID to use when creating part\n- presignedPost.url: S3 endpoint URL\n- presignedPost.fields: Form fields for S3 POST\n- s3Key: S3 object key"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Upload to S3 (Manual - Use S3 URL from step 1)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "key",
+                  "value": "{{s3Key}}",
+                  "description": "From presignedPost.fields.key",
+                  "type": "text"
+                },
+                {
+                  "key": "Policy",
+                  "value": "",
+                  "description": "From presignedPost.fields.Policy",
+                  "type": "text"
+                },
+                {
+                  "key": "X-Amz-Algorithm",
+                  "value": "",
+                  "description": "From presignedPost.fields",
+                  "type": "text"
+                },
+                {
+                  "key": "X-Amz-Credential",
+                  "value": "",
+                  "description": "From presignedPost.fields",
+                  "type": "text"
+                },
+                {
+                  "key": "X-Amz-Date",
+                  "value": "",
+                  "description": "From presignedPost.fields",
+                  "type": "text"
+                },
+                {
+                  "key": "X-Amz-Signature",
+                  "value": "",
+                  "description": "From presignedPost.fields",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "image/jpeg",
+                  "description": "From presignedPost.fields",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "description": "Select your image file - MUST BE LAST",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{s3UploadUrl}}",
+              "host": ["{{s3UploadUrl}}"]
+            },
+            "description": "Upload file directly to S3 using presigned POST.\n\nIMPORTANT:\n1. Copy ALL fields from presignedPost.fields (step 1 response)\n2. File must be LAST in form-data\n3. No Authorization header needed\n4. Successful upload returns 204 No Content"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Photo View URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/:assignmentId/photos/:photoToken/view-url",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", ":assignmentId", "photos", ":photoToken", "view-url"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                },
+                {
+                  "key": "photoToken",
+                  "value": "{{photoToken}}"
+                }
+              ]
+            },
+            "description": "Get a signed URL to view the uploaded photo (if external API supports it)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Token-based upload flow: Request tokens → Upload to S3 → Create part with tokens"
+    },
+    {
+      "name": "Photo Upload - Multipart (Server Upload)",
+      "item": [
+        {
+          "name": "Upload Photos (Multipart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.uploads && response.data.uploads.length > 0) {",
+                  "        const firstUpload = response.data.uploads.find(u => u.success);",
+                  "        if (firstUpload) {",
+                  "            pm.collectionVariables.set('photoToken', firstUpload.token);",
+                  "            console.log('Photo token saved:', firstUpload.token);",
+                  "            console.log('Photo URL:', firstUpload.url);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "description": "Select image file (JPEG, PNG, GIF, WebP, HEIC, HEIF)",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "photos",
+                  "description": "Add more photos (up to 10 total)",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/:assignmentId/upload-photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", ":assignmentId", "upload-photos"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                }
+              ]
+            },
+            "description": "Upload photos using multipart/form-data. Server handles S3 upload.\n\nFeatures:\n- Upload up to 10 photos at once\n- Max 10MB per file\n- Supported: JPEG, PNG, GIF, WebP, HEIC, HEIF\n- Returns tokens for each uploaded photo\n\nPerfect for mobile apps - single API call!"
+          },
+          "response": []
+        }
+      ],
+      "description": "Simple multipart upload - server handles everything. Best for mobile apps."
+    },
+    {
+      "name": "Parts Management",
+      "item": [
+        {
+          "name": "Create Part with Photos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.id) {",
+                  "        pm.collectionVariables.set('partId', response.data.id);",
+                  "        console.log('Part ID saved:', response.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Whirlpool\",\n  \"applianceType\": \"Dishwasher\",\n  \"partNumber\": \"W10822278\",\n  \"partDescription\": \"Door Latch Assembly\",\n  \"quantity\": 1,\n  \"disposition\": \"installed\",\n  \"photoTokens\": [\n    \"{{photoToken}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/:assignmentId/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", ":assignmentId", "parts"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                }
+              ]
+            },
+            "description": "Create a part and link uploaded photos using tokens.\n\nphotoTokens array should contain tokens from either:\n- Token-based upload (step 1)\n- Multipart upload response\n\nDisposition options:\n- installed\n- returned\n- defective\n- warranty"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Assignment Parts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/vendor/assignments/:assignmentId/parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "vendor", "assignments", ":assignmentId", "parts"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                }
+              ]
+            },
+            "description": "Get all parts for an assignment including photo information"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Part",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/:partId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", ":partId"],
+              "variable": [
+                {
+                  "key": "partId",
+                  "value": "{{partId}}"
+                }
+              ]
+            },
+            "description": "Delete a part. This will also delete associated photos from S3."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Assignments",
+      "item": [
+        {
+          "name": "Get Assignment Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/:assignmentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", ":assignmentId"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                }
+              ]
+            },
+            "description": "Get assignment details including job information"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Assignment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\",\n  \"notes\": \"Working on the repair\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assignments/:assignmentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "assignments", ":assignmentId"],
+              "variable": [
+                {
+                  "key": "assignmentId",
+                  "value": "{{assignmentId}}"
+                }
+              ]
+            },
+            "description": "Update assignment status and other fields"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Parts Search",
+      "item": [
+        {
+          "name": "Search Sears Parts",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partNumber\": \"W10822278\",\n  \"modelNumber\": \"WDF520PADM7\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/search-sears",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "search-sears"]
+            },
+            "description": "Search for parts in Sears PartsDirect catalog.\n\nNo authentication required.\nmodelNumber is optional."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
