@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { UserModel } from '../models/user';
 import { VendorModel } from '../models/vendor';
+import { PhotoTokenModel } from '../models/photoToken';
 import { password } from '../utils/password';
 import { jwtService } from '../services/jwt';
 import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
+import jwt from 'jsonwebtoken';
 
 export const authRouter = Router();
 
@@ -503,6 +505,98 @@ authRouter.get('/vendor/assignments/:assignmentId/parts', async (req, res) => {
   } catch (err: any) {
     console.error('[GetAssignmentParts] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to get assignment parts' });
+  }
+});
+
+// POST /api/auth/vendor/assignments/:assignmentId/parts - NO AUTH (proxies to external API)
+// Auto-retrieves photo tokens from database if not provided in request
+authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    
+    console.log('[AddAssignmentPart] ========================================');
+    console.log('[AddAssignmentPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/assignments/${assignmentId}/parts`);
+    console.log('[AddAssignmentPart] Assignment ID:', assignmentId);
+    console.log('[AddAssignmentPart] Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[AddAssignmentPart] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Auto-retrieve photo tokens if not provided
+      let requestBody = { ...req.body };
+      
+      if (!requestBody.photoTokens || requestBody.photoTokens.length === 0) {
+        console.log('[AddAssignmentPart] No photoTokens provided, checking database...');
+        
+        try {
+          // Decode JWT to get user ID
+          const decoded = jwt.decode(token) as any;
+          const userId = decoded?.userId || decoded?.id;
+          
+          if (userId) {
+            // Find unconsumed photo tokens for this assignment and user
+            const storedTokens = await PhotoTokenModel.find({
+              assignmentId: String(assignmentId),
+              userId: String(userId),
+              consumed: false,
+              expiresAt: { $gt: new Date() } // Not expired
+            }).sort({ createdAt: -1 }); // Most recent first
+            
+            if (storedTokens.length > 0) {
+              requestBody.photoTokens = storedTokens.map(t => t.token);
+              console.log('[AddAssignmentPart] ✓ Auto-retrieved', storedTokens.length, 'photo tokens from database');
+              console.log('[AddAssignmentPart] Tokens:', requestBody.photoTokens);
+            } else {
+              console.log('[AddAssignmentPart] No unconsumed photo tokens found in database');
+            }
+          }
+        } catch (dbErr: any) {
+          console.error('[AddAssignmentPart] ⚠️ Failed to retrieve tokens from database:', dbErr.message);
+          // Continue without tokens
+        }
+      } else {
+        console.log('[AddAssignmentPart] Using provided photoTokens:', requestBody.photoTokens);
+      }
+
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/auth/vendor/assignments/${assignmentId}/parts`,
+        token,
+        'POST',
+        requestBody
+      );
+      
+      // Mark tokens as consumed if part creation was successful
+      if (externalResponse.success && requestBody.photoTokens && requestBody.photoTokens.length > 0) {
+        try {
+          await PhotoTokenModel.updateMany(
+            { token: { $in: requestBody.photoTokens } },
+            { $set: { consumed: true } }
+          );
+          console.log('[AddAssignmentPart] ✓ Marked', requestBody.photoTokens.length, 'tokens as consumed');
+        } catch (dbErr: any) {
+          console.error('[AddAssignmentPart] ⚠️ Failed to mark tokens as consumed:', dbErr.message);
+          // Don't fail the request
+        }
+      }
+
+      console.log('[AddAssignmentPart] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AddAssignmentPart] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AddAssignmentPart] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to add assignment part' });
   }
 });
 

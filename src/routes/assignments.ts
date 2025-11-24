@@ -5,10 +5,12 @@ import { JobAssignmentModel } from '../models/jobAssignment';
 import { JobModel } from '../models/job';
 import { OrderModel } from '../models/order';
 import { PartModel } from '../models/part';
+import { PhotoTokenModel } from '../models/photoToken';
 import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
 import multer from 'multer';
 import FormData from 'form-data';
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -423,6 +425,34 @@ assignmentsRouter.post('/:assignmentId/upload-photos', upload.array('photos', 10
       }
 
       console.log('[UploadPhotos] ✓ Upload complete. Success:', uploadResults.filter(r => r.success).length, 'Failed:', uploadResults.filter(r => !r.success).length);
+
+      // Step 3: Save successful upload tokens to MongoDB for auto-retrieval
+      try {
+        // Decode JWT to get user ID
+        const decoded = jwt.decode(token) as any;
+        const userId = decoded?.userId || decoded?.id || 'unknown';
+        
+        const successfulUploads = uploadResults.filter(r => r.success);
+        
+        if (successfulUploads.length > 0) {
+          const photoTokenDocs = successfulUploads.map(upload => ({
+            token: upload.photoToken,
+            assignmentId,
+            userId: String(userId),
+            fileName: upload.fileName,
+            url: upload.url,
+            imageUrl: upload.imageUrl,
+            consumed: false,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+          }));
+
+          await PhotoTokenModel.insertMany(photoTokenDocs);
+          console.log('[UploadPhotos] ✓ Saved', photoTokenDocs.length, 'photo tokens to database');
+        }
+      } catch (dbErr: any) {
+        console.error('[UploadPhotos] ⚠️ Failed to save tokens to database:', dbErr.message);
+        // Don't fail the request, just log the error
+      }
 
       return res.json({
         success: true,
