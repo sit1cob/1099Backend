@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
 import { FeedbackModel } from '../models/feedback';
 import { FeedbackConfigModel } from '../models/feedbackConfig';
+import { UserModel } from '../models/user';
 import mongoose from 'mongoose';
 
 export const feedbackRouter = Router();
@@ -137,20 +138,37 @@ feedbackRouter.get('/', async (req, res) => {
 
     console.log('[Feedback GET] Fetching all feedback, limit:', limit);
 
-    // Return all feedback - no userId filtering
-    // Don't populate userId since users may not exist in MongoDB
+    // Fetch feedback and populate user information
     const feedbacks = await FeedbackModel
       .find({})
       .sort({ submittedAt: -1 })
       .limit(limit)
+      .populate({
+        path: 'userId',
+        select: 'username email vendorId role',
+        model: UserModel
+      })
       .lean();
 
     console.log('[Feedback GET] Found feedbacks:', feedbacks.length);
 
+    // Transform data to include user info in a cleaner format
+    const transformedFeedbacks = feedbacks.map((feedback: any) => ({
+      ...feedback,
+      user: feedback.userId ? {
+        id: feedback.userId._id,
+        username: feedback.userId.username,
+        email: feedback.userId.email,
+        vendorId: feedback.userId.vendorId,
+        role: feedback.userId.role
+      } : null,
+      userId: feedback.userId?._id || feedback.userId // Keep original userId for backward compatibility
+    }));
+
     return res.json({ 
       success: true, 
-      data: feedbacks,
-      count: feedbacks.length 
+      data: transformedFeedbacks,
+      count: transformedFeedbacks.length 
     });
   } catch (err: any) {
     console.error('[Feedback] Error fetching feedback:', err);

@@ -15,6 +15,13 @@ interface FeedbackMetadata {
 interface Feedback {
   _id: string;
   userId: string;
+  user?: {
+    id: string;
+    username: string;
+    email?: string;
+    vendorId?: string;
+    role: string;
+  } | null;
   metadata: FeedbackMetadata;
   answers: FeedbackAnswer[];
   submittedAt: string;
@@ -91,9 +98,21 @@ export function FeedbackTable({ data, isLoading }: FeedbackTableProps) {
                   <div className="text-xs">{formatDate(feedback.submittedAt)}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                    {feedback.userId}
-                  </code>
+                  {feedback.user ? (
+                    <div className="text-xs">
+                      <div className="font-medium text-slate-900">{feedback.user.username}</div>
+                      {feedback.user.email && (
+                        <div className="text-slate-500">{feedback.user.email}</div>
+                      )}
+                      {feedback.user.vendorId && (
+                        <div className="text-slate-400">Vendor: {feedback.user.vendorId}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                      {feedback.userId}
+                    </code>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-slate-600">
                   <div className="text-xs">
