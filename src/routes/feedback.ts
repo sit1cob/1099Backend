@@ -138,36 +138,35 @@ feedbackRouter.get('/', async (req, res) => {
 
     console.log('[Feedback GET] Fetching all feedback, limit:', limit);
 
-    // Fetch feedback and populate user information
+    // Fetch feedback WITHOUT populate first to preserve original userIds
     const feedbacks = await FeedbackModel
       .find({})
       .sort({ submittedAt: -1 })
       .limit(limit)
-      .populate({
-        path: 'userId',
-        select: 'username email vendorId role',
-        model: UserModel
-      })
       .lean();
 
     console.log('[Feedback GET] Found feedbacks:', feedbacks.length);
 
+    // Now try to populate user info separately
+    const userIds = feedbacks.map(f => f.userId).filter(Boolean);
+    const users = await UserModel.find({ _id: { $in: userIds } }).lean();
+    const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
     // Transform data to include user info in a cleaner format
     const transformedFeedbacks = feedbacks.map((feedback: any) => {
-      // Check if userId was populated (has username property) or is just an ObjectId
-      const isPopulated = feedback.userId && typeof feedback.userId === 'object' && feedback.userId.username;
+      const user = feedback.userId ? userMap.get(feedback.userId.toString()) : null;
       
       return {
         ...feedback,
-        user: isPopulated ? {
-          id: feedback.userId._id,
-          username: feedback.userId.username,
-          email: feedback.userId.email,
-          vendorId: feedback.userId.vendorId,
-          role: feedback.userId.role
+        user: user ? {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          vendorId: user.vendorId,
+          role: user.role
         } : null,
-        // Always preserve the original userId (whether it's an ObjectId or populated object)
-        userId: isPopulated ? feedback.userId._id : feedback.userId
+        // Always preserve the original userId ObjectId
+        userId: feedback.userId
       };
     });
 
