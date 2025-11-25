@@ -59,3 +59,28 @@ export async function fetchUniqueRoutes(): Promise<RoutesResponse> {
   return data;
 }
 
+export type FeedbackResponse = {
+  success: boolean;
+  data: Array<{
+    _id: string;
+    userId: string;
+    metadata: {
+      appVersion: string;
+      deviceModel: string;
+      osVersion: string;
+      timestamp: string;
+    };
+    answers: Array<{
+      questionId: string;
+      answer: string | number;
+    }>;
+    submittedAt: string;
+    createdAt?: string;
+  }>;
+  count: number;
+};
+
+export async function fetchFeedback(limit: number = 100): Promise<FeedbackResponse> {
+  const { data } = await client.get<FeedbackResponse>(`/api/feedback?limit=${limit}`);
+  return data;
+}
