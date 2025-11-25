@@ -153,17 +153,23 @@ feedbackRouter.get('/', async (req, res) => {
     console.log('[Feedback GET] Found feedbacks:', feedbacks.length);
 
     // Transform data to include user info in a cleaner format
-    const transformedFeedbacks = feedbacks.map((feedback: any) => ({
-      ...feedback,
-      user: feedback.userId ? {
-        id: feedback.userId._id,
-        username: feedback.userId.username,
-        email: feedback.userId.email,
-        vendorId: feedback.userId.vendorId,
-        role: feedback.userId.role
-      } : null,
-      userId: feedback.userId?._id || feedback.userId // Keep original userId for backward compatibility
-    }));
+    const transformedFeedbacks = feedbacks.map((feedback: any) => {
+      // Check if userId was populated (has username property) or is just an ObjectId
+      const isPopulated = feedback.userId && typeof feedback.userId === 'object' && feedback.userId.username;
+      
+      return {
+        ...feedback,
+        user: isPopulated ? {
+          id: feedback.userId._id,
+          username: feedback.userId.username,
+          email: feedback.userId.email,
+          vendorId: feedback.userId.vendorId,
+          role: feedback.userId.role
+        } : null,
+        // Always preserve the original userId (whether it's an ObjectId or populated object)
+        userId: isPopulated ? feedback.userId._id : feedback.userId
+      };
+    });
 
     return res.json({ 
       success: true, 
