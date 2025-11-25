@@ -540,18 +540,18 @@ authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
           const userId = decoded?.userId || decoded?.id;
           
           if (userId) {
-            // Find unconsumed photo tokens for this assignment and user
-            const storedTokens = await PhotoTokenModel.find({
+            // Find the most recent unconsumed photo token for this assignment and user
+            const latestToken = await PhotoTokenModel.findOne({
               assignmentId: String(assignmentId),
               userId: String(userId),
               consumed: false,
               expiresAt: { $gt: new Date() } // Not expired
             }).sort({ createdAt: -1 }); // Most recent first
             
-            if (storedTokens.length > 0) {
-              requestBody.photoTokens = storedTokens.map(t => t.token);
-              console.log('[AddAssignmentPart] ✓ Auto-retrieved', storedTokens.length, 'photo tokens from database');
-              console.log('[AddAssignmentPart] Tokens:', requestBody.photoTokens);
+            if (latestToken) {
+              requestBody.photoTokens = [latestToken.token];
+              console.log('[AddAssignmentPart] ✓ Auto-retrieved latest photo token from database');
+              console.log('[AddAssignmentPart] Token:', latestToken.token);
             } else {
               console.log('[AddAssignmentPart] No unconsumed photo tokens found in database');
             }
@@ -571,16 +571,16 @@ authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
         requestBody
       );
       
-      // Mark tokens as consumed if part creation was successful
+      // Mark token as consumed if part creation was successful
       if (externalResponse.success && requestBody.photoTokens && requestBody.photoTokens.length > 0) {
         try {
           await PhotoTokenModel.updateMany(
             { token: { $in: requestBody.photoTokens } },
             { $set: { consumed: true } }
           );
-          console.log('[AddAssignmentPart] ✓ Marked', requestBody.photoTokens.length, 'tokens as consumed');
+          console.log('[AddAssignmentPart] ✓ Marked token as consumed:', requestBody.photoTokens[0]);
         } catch (dbErr: any) {
-          console.error('[AddAssignmentPart] ⚠️ Failed to mark tokens as consumed:', dbErr.message);
+          console.error('[AddAssignmentPart] ⚠️ Failed to mark token as consumed:', dbErr.message);
           // Don't fail the request
         }
       }
