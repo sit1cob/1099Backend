@@ -129,9 +129,9 @@ feedbackRouter.post('/submit', authenticateJWT({ skipValidation: true }), async 
 });
 
 // GET /api/feedback
-// Get all feedback submissions
+// Get all feedback submissions - NO AUTH REQUIRED
 // Query params: limit (default: 100)
-feedbackRouter.get('/', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+feedbackRouter.get('/', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
 
