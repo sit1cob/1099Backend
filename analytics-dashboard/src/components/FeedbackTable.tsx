@@ -83,6 +83,7 @@ export function FeedbackTable({ data, isLoading }: FeedbackTableProps) {
             <tr className="border-b border-slate-200 bg-slate-50">
               <th className="px-4 py-3 font-semibold text-slate-700">Submitted</th>
               <th className="px-4 py-3 font-semibold text-slate-700">User ID</th>
+              <th className="px-4 py-3 font-semibold text-slate-700">Logged In User</th>
               <th className="px-4 py-3 font-semibold text-slate-700">Device</th>
               <th className="px-4 py-3 font-semibold text-slate-700">App Version</th>
               <th className="px-4 py-3 font-semibold text-slate-700">Feedback</th>
@@ -98,6 +99,15 @@ export function FeedbackTable({ data, isLoading }: FeedbackTableProps) {
                   <div className="text-xs">{formatDate(feedback.submittedAt)}</div>
                 </td>
                 <td className="px-4 py-3">
+                  {feedback.userId ? (
+                    <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                      {feedback.userId}
+                    </code>
+                  ) : (
+                    <span className="text-xs text-slate-400">null</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
                   {feedback.user ? (
                     <div className="text-xs">
                       <div className="font-medium text-slate-900">{feedback.user.username}</div>
@@ -109,9 +119,7 @@ export function FeedbackTable({ data, isLoading }: FeedbackTableProps) {
                       )}
                     </div>
                   ) : (
-                    <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                      {feedback.userId}
-                    </code>
+                    <span className="text-xs text-slate-400">-</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-slate-600">
