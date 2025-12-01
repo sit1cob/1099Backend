@@ -31,6 +31,7 @@ export type AnalyticsFilter = {
   route?: string;
   search?: string;
   userId?: string;
+  vendorId?: string;
   from?: string;
   to?: string;
   limit?: number;

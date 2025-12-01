@@ -23,8 +23,43 @@ export function FiltersPanel({ value, onChange }: FiltersPanelProps) {
     onChange({ ...value, ...patch });
   };
 
+  const handleLoginFilter = () => {
+    onChange({ 
+      ...value, 
+      route: '/api/auth/login',
+      method: 'POST',
+      page: 1 
+    });
+  };
+
+  const handleClearFilters = () => {
+    onChange({ 
+      success: 'all',
+      limit: value.limit || 50,
+      page: 1 
+    });
+  };
+
   return (
-    <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-6">
+    <div className="space-y-4">
+      {/* Quick Filter Buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleLoginFilter}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+        >
+          🔐 Show Login Events
+        </button>
+        <button
+          onClick={handleClearFilters}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          Clear Filters
+        </button>
+      </div>
+
+      {/* Filter Grid */}
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-6">
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-slate-500">Search</label>
         <input
@@ -40,9 +75,19 @@ export function FiltersPanel({ value, onChange }: FiltersPanelProps) {
         <input
           type="text"
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          placeholder="Filter by user id"
+          placeholder="Username or ID"
           value={value.userId ?? ''}
           onChange={(e) => handleChange({ userId: e.target.value || undefined })}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-slate-500">Vendor ID</label>
+        <input
+          type="text"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          placeholder="Filter by vendor"
+          value={value.vendorId ?? ''}
+          onChange={(e) => handleChange({ vendorId: e.target.value || undefined })}
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -108,6 +153,7 @@ export function FiltersPanel({ value, onChange }: FiltersPanelProps) {
             onChange={(e) => handleChange({ to: e.target.value || undefined })}
           />
         </div>
+      </div>
       </div>
     </div>
   );
