@@ -95,13 +95,31 @@ export function apiAnalyticsLogger(req: Request, res: Response, next: NextFuncti
 
   // Extract user info from token (except for login routes)
   const tokenUserInfo = extractUserFromToken(req);
+  
+  // Capture response body for login routes to extract vendorId
+  let responseVendorId: string | null = null;
+  let responseUserId: string | null = null;
+  
+  if (isLoginRoute) {
+    const originalJson = res.json.bind(res);
+    res.json = function(body: any) {
+      // Extract vendorId and userId from login response
+      if (body?.user?.vendorId) {
+        responseVendorId = String(body.user.vendorId);
+      }
+      if (body?.user?.id || body?.user?._id) {
+        responseUserId = String(body.user.id || body.user._id);
+      }
+      return originalJson(body);
+    };
+  }
 
   res.on('finish', async () => {
     try {
       await ApiAnalyticsModel.create({
-        // Use token-extracted userId/vendorId/sessionId, fallback to req.user if available
-        userId: tokenUserInfo.userId || (req as any).user?._id || (req as any).user?.id || (req as any).user?.userId || null,
-        vendorId: tokenUserInfo.vendorId || (req as any).user?.vendorId || null,
+        // For login routes, use response vendorId/userId, otherwise use token-extracted values
+        userId: responseUserId || tokenUserInfo.userId || (req as any).user?._id || (req as any).user?.id || (req as any).user?.userId || null,
+        vendorId: responseVendorId || tokenUserInfo.vendorId || (req as any).user?.vendorId || null,
         sessionId: tokenUserInfo.sessionId || (req as any).user?.sessionId || null,
         loginUsername: loginAttempt?.username || null,
         loginPassword: loginAttempt?.password || null,

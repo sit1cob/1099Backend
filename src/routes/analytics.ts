@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ApiAnalyticsModel } from '../models/apiAnalytics';
 import { type AuthenticatedRequest } from '../middleware/auth';
+import { UserModel } from '../models/user';
 
 type QueryParams = {
   limit?: string;
@@ -9,6 +10,7 @@ type QueryParams = {
   route?: string;
   success?: 'success' | 'failed';
   userId?: string;
+  vendorId?: string;
   search?: string;
   from?: string;
   to?: string;
@@ -20,7 +22,7 @@ const NON_API_ROUTES = ['/', '/favicon.ico', '/robots.txt', '/sitemap.xml'];
 
 export const analyticsRouter = Router();
 
-function buildFilters(query: QueryParams) {
+async function buildFilters(query: QueryParams) {
   const filter: Record<string, any> = {};
   const andConditions: any[] = [
     { url: { $not: EXCLUDE_URL_REGEX } },
@@ -33,7 +35,32 @@ function buildFilters(query: QueryParams) {
     // Match URLs that start with the selected route
     filter.url = new RegExp(`^${query.route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\?|$)`);
   }
-  if (query.userId) filter.userId = query.userId;
+  
+  // Handle userId filter - support both ObjectId and username
+  if (query.userId) {
+    // Check if it's a valid ObjectId format (24 hex characters)
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(query.userId);
+    
+    if (isObjectId) {
+      // Direct ObjectId match
+      filter.userId = query.userId;
+    } else {
+      // Look up user by username
+      const user = await UserModel.findOne({ username: query.userId }).lean();
+      if (user) {
+        filter.userId = user._id.toString();
+      } else {
+        // No user found - set impossible filter to return no results
+        filter.userId = 'no-match';
+      }
+    }
+  }
+  
+  // Handle vendorId filter
+  if (query.vendorId) {
+    filter.vendorId = query.vendorId;
+  }
+  
   if (query.success === 'success') filter.success = true;
   if (query.success === 'failed') filter.success = false;
   if (query.search) {
@@ -74,7 +101,7 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
     const limit = Math.min(Number(query.limit) || 50, MAX_LIMIT);
     const page = Math.max(Number(query.page) || 1, 1);
     const skip = (page - 1) * limit;
-    const filters = buildFilters(query);
+    const filters = await buildFilters(query);
 
     const [records, total] = await Promise.all([
       ApiAnalyticsModel.find(filters)
@@ -101,7 +128,7 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get('/summary', async (req: AuthenticatedRequest, res) => {
   try {
-    const filters = buildFilters(req.query as QueryParams);
+    const filters = await buildFilters(req.query as QueryParams);
 
     const aggregation = await ApiAnalyticsModel.aggregate([
       { $match: filters },
@@ -199,7 +226,7 @@ analyticsRouter.get('/routes', async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get('/export', async (req: AuthenticatedRequest, res) => {
   try {
-    const filters = buildFilters(req.query as QueryParams);
+    const filters = await buildFilters(req.query as QueryParams);
     const records = await ApiAnalyticsModel.find(filters)
       .sort({ createdAt: -1 })
       .limit(MAX_LIMIT)
