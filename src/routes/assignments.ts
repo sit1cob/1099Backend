@@ -27,6 +27,11 @@ const upload = multer({
 
 export const assignmentsRouter = Router();
 
+ function getBearerTokenFromHeader(headerValue: unknown) {
+   const raw = typeof headerValue === 'string' ? headerValue : '';
+   return raw.startsWith('Bearer ') ? raw.substring(7) : raw;
+ }
+
 // GET /api/assignments/:id - NO AUTH (proxies to external API)
 // This must be defined BEFORE the authenticateJWT() middleware
 assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
@@ -71,7 +76,7 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
 
             // STEP 2.1: Fetch productInfoUpdate from MongoDB and merge it
             try {
-              const mongoJob = await JobModel.findOne({
+              const mongoJob: any = await JobModel.findOne({
                 $or: [
                   { externalId: String(assignment.jobId) },
                   { _id: mongoose.isValidObjectId(assignment.jobId) ? new mongoose.Types.ObjectId(assignment.jobId) : null }
@@ -605,6 +610,182 @@ assignmentsRouter.post('/:id/schedule', async (req: AuthenticatedRequest, res) =
   return handleRescheduleAssignment(req, res, 'POST');
 });
 
+ // ==========================================================
+ // Part Orders Wrapper APIs (require JWT; pass-through to external API)
+ // ==========================================================
+
+ // 1. Search Models
+ // GET /api/assignments/:assignmentId/models/search?q={query}
+ assignmentsRouter.get('/:assignmentId/models/search', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId } = req.params;
+     const q = typeof req.query.q === 'string' ? req.query.q : '';
+
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/models/search?q=${encodeURIComponent(q)}`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'GET');
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to search models' });
+   }
+ });
+
+ // 2. Get Model Details
+ // GET /api/assignments/:assignmentId/models/:modelId
+ assignmentsRouter.get('/:assignmentId/models/:modelId', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, modelId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/models/${encodeURIComponent(modelId)}`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'GET');
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to get model details' });
+   }
+ });
+
+ // 3. Get Parts for Model
+ // GET /api/assignments/:assignmentId/models/:modelId/parts
+ assignmentsRouter.get('/:assignmentId/models/:modelId/parts', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, modelId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/models/${encodeURIComponent(modelId)}/parts`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'GET');
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to get parts for model' });
+   }
+ });
+
+ // 4. Create Draft Order
+ // POST /api/assignments/:assignmentId/orders
+ assignmentsRouter.post('/:assignmentId/orders', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/orders`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'POST', req.body);
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to create draft order' });
+   }
+ });
+
+ // 5. List Orders
+ // GET /api/assignments/:assignmentId/orders?status={status}
+ assignmentsRouter.get('/:assignmentId/orders', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId } = req.params;
+     const status = typeof req.query.status === 'string' ? req.query.status : '';
+
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = status
+       ? `/api/assignments/${assignmentId}/orders?status=${encodeURIComponent(status)}`
+       : `/api/assignments/${assignmentId}/orders`;
+
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'GET');
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to list orders' });
+   }
+ });
+
+ // 6. Get Order Details
+ // GET /api/assignments/:assignmentId/orders/:orderId
+ assignmentsRouter.get('/:assignmentId/orders/:orderId', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, orderId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'GET');
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to get order details' });
+   }
+ });
+
+ // 7. Update Order Items (draft only)
+ // PATCH /api/assignments/:assignmentId/orders/:orderId
+ assignmentsRouter.patch('/:assignmentId/orders/:orderId', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, orderId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'PATCH', req.body);
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to update order items' });
+   }
+ });
+
+ // 8. Submit Order
+ // POST /api/assignments/:assignmentId/orders/:orderId/submit
+ assignmentsRouter.post('/:assignmentId/orders/:orderId/submit', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, orderId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}/submit`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'POST', req.body || {});
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to submit order' });
+   }
+ });
+
+ // 9. Cancel Order
+ // POST /api/assignments/:assignmentId/orders/:orderId/cancel
+ assignmentsRouter.post('/:assignmentId/orders/:orderId/cancel', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, orderId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}/cancel`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'POST', req.body);
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to cancel order' });
+   }
+ });
+
+ // 10. Delete Draft Order
+ // DELETE /api/assignments/:assignmentId/orders/:orderId
+ assignmentsRouter.delete('/:assignmentId/orders/:orderId', authenticateJWT({ skipValidation: true }), async (req: AuthenticatedRequest, res) => {
+   try {
+     const { assignmentId, orderId } = req.params;
+     const token = getBearerTokenFromHeader(req.headers.authorization);
+     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+     const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}`;
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'DELETE');
+
+     // If the external API returns 204, axios adapter may return empty. Pass through.
+     if (externalResponse === undefined || externalResponse === null || externalResponse === '') {
+       return res.status(204).send();
+     }
+     return res.json(externalResponse);
+   } catch (err: any) {
+     return res.status(500).json({ success: false, message: err?.message || 'Failed to delete draft order' });
+   }
+ });
+
 // POST /api/assignments/:id - NO AUTH (proxies to external API v2)
 // This is an alias for PATCH - Android app uses POST instead of PATCH
 // This must be defined BEFORE the authenticateJWT() middleware
@@ -696,14 +877,14 @@ assignmentsRouter.get('/:id/details', async (req: AuthenticatedRequest, res) => 
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid assignment id' });
     if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    const assignment = await JobAssignmentModel.findById(id).lean();
+    const assignment: any = await JobAssignmentModel.findById(id).lean();
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
     if (String(assignment.vendorId) !== String(req.user.vendorId)) {
       return res.status(403).json({ success: false, message: 'Insufficient permissions' });
     }
 
     // Fetch job details
-    const jobDoc = await getJobDoc(new mongoose.Types.ObjectId(assignment.jobId));
+    const jobDoc: any = await getJobDoc(new mongoose.Types.ObjectId(assignment.jobId));
     
     // Fetch parts
     const parts = await PartModel.find({ assignmentId: new mongoose.Types.ObjectId(id) })
@@ -871,7 +1052,7 @@ assignmentsRouter.get('/:assignmentId/parts', async (req: AuthenticatedRequest, 
     if (!mongoose.isValidObjectId(assignmentId)) return res.status(400).json({ success: false, message: 'Invalid assignmentId' });
     if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    const assignment = await JobAssignmentModel.findById(assignmentId).lean();
+    const assignment: any = await JobAssignmentModel.findById(assignmentId).lean();
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
     if (String(assignment.vendorId) !== String(req.user.vendorId)) return res.status(403).json({ success: false, message: 'Insufficient permissions' });
 
@@ -892,12 +1073,12 @@ assignmentsRouter.delete('/:assignmentId/parts/:partId', async (req: Authenticat
     if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
     // Verify assignment belongs to vendor
-    const assignment = await JobAssignmentModel.findById(assignmentId).lean();
+    const assignment: any = await JobAssignmentModel.findById(assignmentId).lean();
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
     if (String(assignment.vendorId) !== String(req.user.vendorId)) return res.status(403).json({ success: false, message: 'Insufficient permissions' });
 
     // Find and verify part belongs to this assignment
-    const part = await PartModel.findById(partId).lean();
+    const part: any = await PartModel.findById(partId).lean();
     if (!part) return res.status(404).json({ success: false, message: 'Part not found' });
     if (String(part.assignmentId) !== String(assignmentId)) {
       return res.status(400).json({ success: false, message: 'Part does not belong to this assignment' });
@@ -928,7 +1109,7 @@ assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) =>
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid assignment id' });
     if (!req.user?.vendorId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    const assignment = await JobAssignmentModel.findById(id);
+    const assignment: any = await JobAssignmentModel.findById(id);
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
     if (String(assignment.vendorId) !== String(req.user.vendorId)) {
       return res.status(403).json({ success: false, message: 'Insufficient permissions' });
@@ -978,7 +1159,7 @@ assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) =>
     await assignment.save();
 
     // Fetch updated job details
-    const updatedJob = await JobModel.findById(assignment.jobId).lean();
+    const updatedJob: any = await JobModel.findById(assignment.jobId).lean();
 
     return res.json({
       success: true,
