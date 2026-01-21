@@ -6,12 +6,34 @@ import { PartsCatalogAdapter } from '../services/partsCatalogAdapter';
 
 export const partsRouter = Router();
 
+function getPartsCatalogOverrides(req: Request) {
+  const hssomBasicAuth = typeof req.headers['x-hssom-basic-auth'] === 'string' ? req.headers['x-hssom-basic-auth'] : undefined;
+  const partsApiKey = typeof req.headers['x-parts-apikey'] === 'string' ? req.headers['x-parts-apikey'] : undefined;
+
+  let hssomToken: string | undefined;
+  const auth = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
+  if (auth?.startsWith('Bearer ')) {
+    hssomToken = auth.slice('Bearer '.length).trim();
+  }
+  if (!hssomToken && typeof req.headers['x-hssom-token'] === 'string') {
+    hssomToken = req.headers['x-hssom-token'];
+  }
+
+  return { hssomBasicAuth, hssomToken, partsApiKey };
+}
+
 // POST /api/parts/auth/token - Public (fetches and caches HSSOM token)
-partsRouter.post('/auth/token', async (_req, res) => {
+partsRouter.post('/auth/token', async (req, res) => {
   try {
-    const { tokenLife, raw } = await PartsCatalogAdapter.fetchHssomToken();
+    const overrides = getPartsCatalogOverrides(req);
+    const { tokenLife, raw } = await PartsCatalogAdapter.fetchHssomToken({
+      hssomBasicAuth: overrides.hssomBasicAuth,
+    });
     // Also warm the cache for subsequent calls
-    await PartsCatalogAdapter.getValidToken();
+    await PartsCatalogAdapter.getValidToken({
+      hssomBasicAuth: overrides.hssomBasicAuth,
+      hssomToken: overrides.hssomToken,
+    });
     return res.json({ ...raw, tokenLife });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch HSSOM token' });
@@ -22,7 +44,7 @@ partsRouter.post('/auth/token', async (_req, res) => {
 partsRouter.get('/models/search', async (req, res) => {
   try {
     const query = req.query as Record<string, any>;
-    const data = await PartsCatalogAdapter.callPartsCatalogService('modelSearch', query);
+    const data = await PartsCatalogAdapter.callPartsCatalogService('modelSearch', query, getPartsCatalogOverrides(req));
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to search models' });
@@ -33,7 +55,7 @@ partsRouter.get('/models/search', async (req, res) => {
 partsRouter.get('/items/search', async (req, res) => {
   try {
     const query = req.query as Record<string, any>;
-    const data = await PartsCatalogAdapter.callPartsCatalogService('itemSearch', query);
+    const data = await PartsCatalogAdapter.callPartsCatalogService('itemSearch', query, getPartsCatalogOverrides(req));
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to search parts' });
@@ -44,7 +66,7 @@ partsRouter.get('/items/search', async (req, res) => {
 partsRouter.get('/models/:modelId/details', async (req, res) => {
   try {
     const query = { ...(req.query as Record<string, any>), modelId: req.params.modelId };
-    const data = await PartsCatalogAdapter.callPartsCatalogService('getModelDetails', query);
+    const data = await PartsCatalogAdapter.callPartsCatalogService('getModelDetails', query, getPartsCatalogOverrides(req));
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch model details' });

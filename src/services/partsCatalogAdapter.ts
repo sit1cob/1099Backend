@@ -13,6 +13,12 @@ type CachedToken = {
   expiresAtMs: number;
 };
 
+type CredentialOverrides = {
+  hssomBasicAuth?: string;
+  hssomToken?: string;
+  partsApiKey?: string;
+};
+
 let cachedToken: CachedToken | null = null;
 let inflightTokenPromise: Promise<string> | null = null;
 
@@ -28,8 +34,8 @@ export class PartsCatalogAdapter {
     );
   }
 
-  static getHssomBasicAuthHeader() {
-    const basic = process.env.HSSOM_BASIC_AUTH;
+  static getHssomBasicAuthHeader(override?: string) {
+    const basic = override ?? process.env.HSSOM_BASIC_AUTH;
     if (!basic) {
       throw new Error('Missing env var HSSOM_BASIC_AUTH');
     }
@@ -40,15 +46,17 @@ export class PartsCatalogAdapter {
     return process.env.PARTS_API_BASE_URL || 'https://api.shs-core.com';
   }
 
-  static getPartsApiKey() {
-    const apiKey = process.env.PARTS_APIKEY;
+  static getPartsApiKey(override?: string) {
+    const apiKey = override ?? process.env.PARTS_APIKEY;
     if (!apiKey) {
       throw new Error('Missing env var PARTS_APIKEY');
     }
     return apiKey;
   }
 
-  static async fetchHssomToken(): Promise<{ token: string; tokenLife?: number; raw: HssomTokenResponse }> {
+  static async fetchHssomToken(
+    overrides: Pick<CredentialOverrides, 'hssomBasicAuth'> = {}
+  ): Promise<{ token: string; tokenLife?: number; raw: HssomTokenResponse }> {
     const url = PartsCatalogAdapter.getHssomAuthUrl();
 
     const response = await axios.request<HssomTokenResponse>({
@@ -56,7 +64,7 @@ export class PartsCatalogAdapter {
       url,
       headers: {
         Accept: 'application/json',
-        Authorization: PartsCatalogAdapter.getHssomBasicAuthHeader(),
+        Authorization: PartsCatalogAdapter.getHssomBasicAuthHeader(overrides.hssomBasicAuth),
       },
       timeout: 30000,
     });
@@ -71,8 +79,12 @@ export class PartsCatalogAdapter {
     return { token, tokenLife: data?.tokenLife, raw: data };
   }
 
-  static async getValidToken(): Promise<string> {
+  static async getValidToken(overrides: Pick<CredentialOverrides, 'hssomBasicAuth' | 'hssomToken'> = {}): Promise<string> {
     const safetyMs = 30_000;
+
+    if (overrides.hssomToken && String(overrides.hssomToken).trim() !== '') {
+      return String(overrides.hssomToken).trim();
+    }
 
     if (cachedToken && cachedToken.expiresAtMs - safetyMs > nowMs()) {
       return cachedToken.token;
@@ -84,7 +96,9 @@ export class PartsCatalogAdapter {
 
     inflightTokenPromise = (async () => {
       try {
-        const { token, tokenLife } = await PartsCatalogAdapter.fetchHssomToken();
+        const { token, tokenLife } = await PartsCatalogAdapter.fetchHssomToken({
+          hssomBasicAuth: overrides.hssomBasicAuth,
+        });
         const tokenLifeSeconds = typeof tokenLife === 'number' && tokenLife > 0 ? tokenLife : 5400;
 
         cachedToken = {
@@ -103,9 +117,13 @@ export class PartsCatalogAdapter {
 
   static async callPartsCatalogService<T = any>(
     methodName: string,
-    query: Record<string, any> = {}
+    query: Record<string, any> = {},
+    overrides: CredentialOverrides = {}
   ): Promise<T> {
-    const token = await PartsCatalogAdapter.getValidToken();
+    const token = await PartsCatalogAdapter.getValidToken({
+      hssomBasicAuth: overrides.hssomBasicAuth,
+      hssomToken: overrides.hssomToken,
+    });
 
     const url = `${PartsCatalogAdapter.getPartsApiBaseUrl()}/sis/proxy/PartsCatalogService/${methodName}`;
 
@@ -114,7 +132,7 @@ export class PartsCatalogAdapter {
     };
 
     if (params.apikey == null || String(params.apikey).trim() === '') {
-      params.apikey = PartsCatalogAdapter.getPartsApiKey();
+      params.apikey = PartsCatalogAdapter.getPartsApiKey(overrides.partsApiKey);
     }
 
     const response = await axios.request<T>({
