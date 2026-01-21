@@ -153,6 +153,11 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
         // Helper function to filter jobs by scheduledDate
         const filterFutureJobs = (jobs: any[]): any[] => {
           return jobs.filter((job: any) => {
+            const status = String(job?.status || '').toLowerCase();
+            if (status !== 'available') {
+              return false;
+            }
+
             if (!job.scheduledDate) {
               // If no scheduledDate, exclude the job
               return false;

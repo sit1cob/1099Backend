@@ -181,6 +181,8 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
       tomorrow.setDate(tomorrow.getDate() + 1);
       
       availableJobs = availableJobs.filter((job: any) => {
+        const status = String(job?.status || '').toLowerCase();
+        if (status !== 'available') return false;
         if (!job.scheduledDate) return false;
         const scheduledDate = new Date(job.scheduledDate);
         if (isNaN(scheduledDate.getTime())) return false;
