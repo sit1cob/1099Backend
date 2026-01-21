@@ -75,8 +75,12 @@ export class PartsCatalogAdapter {
         const status = err.response?.status;
         const data = err.response?.data;
         const details = data != null ? JSON.stringify(data) : '';
+        const code = err.code;
+        const msg = err.message;
         throw new Error(
-          `HSSOM token request failed${status ? ` (${status})` : ''}${details ? `: ${details}` : ''}`
+          `HSSOM token request failed${status ? ` (${status})` : ''}${code ? ` [${code}]` : ''}${
+            details ? `: ${details}` : msg ? `: ${msg}` : ''
+          }`
         );
       }
       throw err;
