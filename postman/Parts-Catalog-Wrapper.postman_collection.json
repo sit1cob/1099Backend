@@ -1,0 +1,79 @@
+{
+  "info": {
+    "name": "Parts Catalog Wrapper API",
+    "description": "Wrapper/proxy endpoints for HSSOM auth + PartsCatalogService under /api/parts (no JWT required).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5001", "type": "string" },
+    { "key": "modelQuery", "value": "LFSS2612TF0", "type": "string" },
+    { "key": "partQuery", "value": "279838", "type": "string" },
+    { "key": "modelId", "value": "01650001428LFSS2612TF0", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "HSSOM Auth",
+      "item": [
+        {
+          "name": "1. Get HSSOM Token (server-side)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/auth/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "auth", "token"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Parts Catalog",
+      "item": [
+        {
+          "name": "2. Model Search",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/models/search?q={{modelQuery}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "models", "search"],
+              "query": [{ "key": "q", "value": "{{modelQuery}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3. Part Search (Item Search)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/items/search?q={{partQuery}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "items", "search"],
+              "query": [{ "key": "q", "value": "{{partQuery}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. Model Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/models/{{modelId}}/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "models", "{{modelId}}", "details"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

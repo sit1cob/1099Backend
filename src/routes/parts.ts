@@ -2,8 +2,54 @@ import { Router } from 'express';
 import type { Request } from 'express';
 import axios from 'axios';
 import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
+import { PartsCatalogAdapter } from '../services/partsCatalogAdapter';
 
 export const partsRouter = Router();
+
+// POST /api/parts/auth/token - Public (fetches and caches HSSOM token)
+partsRouter.post('/auth/token', async (_req, res) => {
+  try {
+    const { tokenLife, raw } = await PartsCatalogAdapter.fetchHssomToken();
+    // Also warm the cache for subsequent calls
+    await PartsCatalogAdapter.getValidToken();
+    return res.json({ ...raw, tokenLife });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch HSSOM token' });
+  }
+});
+
+// GET /api/parts/models/search - Public (proxies to PartsCatalogService/modelSearch)
+partsRouter.get('/models/search', async (req, res) => {
+  try {
+    const query = req.query as Record<string, any>;
+    const data = await PartsCatalogAdapter.callPartsCatalogService('modelSearch', query);
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to search models' });
+  }
+});
+
+// GET /api/parts/items/search - Public (proxies to PartsCatalogService/itemSearch)
+partsRouter.get('/items/search', async (req, res) => {
+  try {
+    const query = req.query as Record<string, any>;
+    const data = await PartsCatalogAdapter.callPartsCatalogService('itemSearch', query);
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to search parts' });
+  }
+});
+
+// GET /api/parts/models/:modelId/details - Public (proxies to PartsCatalogService/getModelDetails)
+partsRouter.get('/models/:modelId/details', async (req, res) => {
+  try {
+    const query = { ...(req.query as Record<string, any>), modelId: req.params.modelId };
+    const data = await PartsCatalogAdapter.callPartsCatalogService('getModelDetails', query);
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch model details' });
+  }
+});
 
 // DELETE /api/parts/:id - NO AUTH (proxies to external API)
 // Remove a part from the list
