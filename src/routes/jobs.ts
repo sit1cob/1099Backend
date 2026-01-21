@@ -144,9 +144,9 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
       if (externalResponse && externalResponse.success) {
         // Calculate start of tomorrow (midnight)
         const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setHours(0, 0, 0, 0);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrow = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0)
+        );
 
         console.log('[JobsAvailable] Filtering jobs - only including jobs scheduled after:', tomorrow.toISOString());
 
@@ -169,7 +169,7 @@ jobsRouter.get('/available', async (req: AuthenticatedRequest, res) => {
               return false;
             }
 
-            // Only include jobs scheduled strictly after today (tomorrow or later)
+            // Only include jobs scheduled strictly after today (tomorrow or later) (UTC cutoff)
             return scheduledDate >= tomorrow;
           });
         };

@@ -175,10 +175,11 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
         : (availableJobsResponse?.data?.jobs || []);
       
       // Filter jobs to only include future dates (excluding today) - same logic as /api/jobs/available
+      // Use UTC cutoff to avoid server-timezone-dependent results (scheduledDate is in Z/UTC)
       const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setHours(0, 0, 0, 0);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrow = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0)
+      );
       
       availableJobs = availableJobs.filter((job: any) => {
         const status = String(job?.status || '').toLowerCase();
