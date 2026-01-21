@@ -37,6 +37,7 @@ partsRouter.post('/auth/token', async (req, res) => {
     return res.json({ ...raw, tokenLife });
   } catch (err: any) {
     const msg = err?.message || 'Failed to fetch HSSOM token';
+    console.error('[PartsCatalog] HSSOM token fetch failed:', msg);
     return res.status(502).json({ success: false, message: msg });
   }
 });
