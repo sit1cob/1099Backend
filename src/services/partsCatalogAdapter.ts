@@ -59,15 +59,28 @@ export class PartsCatalogAdapter {
   ): Promise<{ token: string; tokenLife?: number; raw: HssomTokenResponse }> {
     const url = PartsCatalogAdapter.getHssomAuthUrl();
 
-    const response = await axios.request<HssomTokenResponse>({
-      method: 'POST',
-      url,
-      headers: {
-        Accept: 'application/json',
-        Authorization: PartsCatalogAdapter.getHssomBasicAuthHeader(overrides.hssomBasicAuth),
-      },
-      timeout: 30000,
-    });
+    let response;
+    try {
+      response = await axios.request<HssomTokenResponse>({
+        method: 'GET',
+        url,
+        headers: {
+          Accept: 'application/json',
+          Authorization: PartsCatalogAdapter.getHssomBasicAuthHeader(overrides.hssomBasicAuth),
+        },
+        timeout: 30000,
+      });
+    } catch (err: any) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const data = err.response?.data;
+        const details = data != null ? JSON.stringify(data) : '';
+        throw new Error(
+          `HSSOM token request failed${status ? ` (${status})` : ''}${details ? `: ${details}` : ''}`
+        );
+      }
+      throw err;
+    }
 
     const data = response.data;
     const token = data?.token;

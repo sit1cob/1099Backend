@@ -36,7 +36,8 @@ partsRouter.post('/auth/token', async (req, res) => {
     });
     return res.json({ ...raw, tokenLife });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err?.message || 'Failed to fetch HSSOM token' });
+    const msg = err?.message || 'Failed to fetch HSSOM token';
+    return res.status(502).json({ success: false, message: msg });
   }
 });
 
