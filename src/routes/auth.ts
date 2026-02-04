@@ -492,7 +492,20 @@ authRouter.get('/vendor/assignments/:assignmentId/parts', async (req, res) => {
         token,
         'GET'
       );
-      
+
+      if (externalResponse?.success) {
+        if (Array.isArray(externalResponse?.data)) {
+          externalResponse.data = externalResponse.data.map((part: any) => {
+            if (part && part.partType === 'ordered') return { ...part, partType: 'order_part' };
+            return part;
+          });
+        } else if (externalResponse?.data && typeof externalResponse.data === 'object') {
+          if ((externalResponse.data as any).partType === 'ordered') {
+            externalResponse.data = { ...externalResponse.data, partType: 'order_part' };
+          }
+        }
+      }
+
       console.log('[GetAssignmentParts] ✓ Returning external API response');
       return res.json(externalResponse);
     } catch (extErr: any) {
@@ -570,6 +583,19 @@ authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
         'POST',
         requestBody
       );
+
+      if (externalResponse?.success) {
+        if (Array.isArray(externalResponse?.data)) {
+          externalResponse.data = externalResponse.data.map((part: any) => {
+            if (part && part.partType === 'ordered') return { ...part, partType: 'order_part' };
+            return part;
+          });
+        } else if (externalResponse?.data && typeof externalResponse.data === 'object') {
+          if ((externalResponse.data as any).partType === 'ordered') {
+            externalResponse.data = { ...externalResponse.data, partType: 'order_part' };
+          }
+        }
+      }
       
       // Mark token as consumed if part creation was successful
       if (externalResponse.success && requestBody.photoTokens && requestBody.photoTokens.length > 0) {
