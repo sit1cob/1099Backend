@@ -122,6 +122,15 @@ vendorsRouter.get('/me/assignments', async (req: AuthenticatedRequest, res) => {
       console.log('[VendorAssignments] ================================================');
       console.log('[VendorAssignments] ✓ Returning external API response (success or failure)');
 
+      if (externalResponse?.success && Array.isArray(externalResponse?.data)) {
+        externalResponse.data = externalResponse.data.map((assignment: any) => {
+          if (assignment && assignment.status === 'diagnostic_complete') {
+            return { ...assignment, status: 'waiting_on_parts' };
+          }
+          return assignment;
+        });
+      }
+
       // Always return external API response (even if failed)
       return res.json(externalResponse);
     } catch (extErr: any) {

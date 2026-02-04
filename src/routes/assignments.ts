@@ -64,6 +64,10 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
 
       const assignment = externalResponse.data;
 
+      const mappedStatus = assignment && assignment.status === 'diagnostic_complete'
+        ? 'waiting_on_parts'
+        : assignment.status;
+
       // STEP 2: Fetch job details from external API
       let jobDetails = null;
       if (assignment.jobId) {
@@ -116,7 +120,7 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
           _id: String(assignment.id),
           jobId: String(assignment.jobId),
           vendorId: String(assignment.vendorId),
-          status: assignment.status,
+          status: mappedStatus,
           vendorNotes: assignment.vendorNotes || null,
           action: assignment.action || null,
           customerNotHome: assignment.customerNotHome || { status: false },
