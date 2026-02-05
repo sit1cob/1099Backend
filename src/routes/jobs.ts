@@ -322,6 +322,7 @@ jobsRouter.post('/:id/claims', async (req: AuthenticatedRequest, res) => {
     // Try external API first if token exists
     if (token) {
       try {
+        console.log('[ClaimJob] Body:', JSON.stringify(req.body, null, 2));
         console.log('[ClaimJob] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/jobs/${id}/claims`);
         const externalResponse = await ExternalApiAdapter.callExternalApi(
           `/api/jobs/${id}/claims`,
