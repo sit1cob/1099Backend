@@ -469,6 +469,53 @@ authRouter.post('/register-vendor', async (req, res) => {
   }
 });
 
+// PATCH /api/auth/vendor/assignments/:assignmentId - NO AUTH (proxies to external API v2)
+// This must be defined BEFORE the authenticateJWT() middleware
+authRouter.patch('/vendor/assignments/:assignmentId', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    console.log('[AuthVendorUpdateAssignment] ========================================');
+    console.log('[AuthVendorUpdateAssignment] Method: PATCH');
+    console.log('[AuthVendorUpdateAssignment] External URL:', `${EXTERNAL_API_URL}/api/v2/assignments/${assignmentId}`);
+    console.log('[AuthVendorUpdateAssignment] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[AuthVendorUpdateAssignment] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      console.log('[AuthVendorUpdateAssignment] Token (first 20 chars):', String(token).substring(0, 20) + '...');
+
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/v2/assignments/${assignmentId}`,
+        token,
+        'PATCH',
+        req.body
+      );
+
+      console.log('[AuthVendorUpdateAssignment] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AuthVendorUpdateAssignment] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AuthVendorUpdateAssignment] ================================================');
+      console.log('[AuthVendorUpdateAssignment] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AuthVendorUpdateAssignment] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({
+        success: false,
+        message: extErr.message || 'External API call failed'
+      });
+    }
+  } catch (err: any) {
+    console.error('[AuthVendorUpdateAssignment] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
+  }
+});
+
 // GET /api/auth/vendor/assignments/:assignmentId/parts - NO AUTH (proxies to external API)
 authRouter.get('/vendor/assignments/:assignmentId/parts', async (req, res) => {
   try {
