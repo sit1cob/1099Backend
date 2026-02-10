@@ -280,6 +280,73 @@ assignmentsRouter.post('/:assignmentId/photo-upload-tokens', async (req: Authent
   }
 });
 
+// POST /api/assignments/:assignmentId/completion-photo-upload-tokens - NO AUTH (proxies to external API)
+// This must be defined BEFORE the authenticateJWT() middleware
+// Accepts: files metadata for completion photos
+assignmentsRouter.post('/:assignmentId/completion-photo-upload-tokens', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { assignmentId } = req.params;
+    console.log('[CompletionPhotoUploadTokens] ========================================');
+    console.log('[CompletionPhotoUploadTokens] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${assignmentId}/completion-photo-upload-tokens`);
+    console.log('[CompletionPhotoUploadTokens] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[CompletionPhotoUploadTokens] ========================================');
+
+    // Get the token from request headers - no validation, just pass through
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${assignmentId}/completion-photo-upload-tokens`,
+        token,
+        'POST',
+        req.body
+      );
+
+      console.log('[CompletionPhotoUploadTokens] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[CompletionPhotoUploadTokens] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[CompletionPhotoUploadTokens] ================================================');
+
+      // Transform the response to include S3 URLs
+      if (externalResponse.success && externalResponse.data?.tokens) {
+        const transformedTokens = externalResponse.data.tokens.map((tokenData: any) => {
+          const { uploadUrl, uploadFields } = tokenData;
+
+          const baseUrl = uploadUrl.endsWith('/') ? uploadUrl.slice(0, -1) : uploadUrl;
+          const key = uploadFields.key;
+          const s3Url = `${baseUrl}/${key}`;
+
+          return {
+            ...tokenData,
+            url: s3Url,
+            imageUrl: s3Url,
+            photoToken: tokenData.token
+          };
+        });
+
+        externalResponse.data.tokens = transformedTokens;
+        console.log('[CompletionPhotoUploadTokens] ✓ Added S3 URLs to tokens');
+      }
+
+      console.log('[CompletionPhotoUploadTokens] ✓ Returning transformed response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[CompletionPhotoUploadTokens] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({
+        success: false,
+        message: extErr.message || 'External API call failed'
+      });
+    }
+  } catch (err: any) {
+    console.error('[CompletionPhotoUploadTokens] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to get completion photo upload tokens' });
+  }
+});
+
 // GET /api/assignments/:assignmentId/photos/:photoToken/view-url - Get signed view URL for uploaded photo
 // This must be defined BEFORE the authenticateJWT() middleware
 assignmentsRouter.get('/:assignmentId/photos/:photoToken/view-url', async (req: AuthenticatedRequest, res) => {
