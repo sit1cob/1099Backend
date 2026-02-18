@@ -833,7 +833,19 @@ assignmentsRouter.post('/:id/schedule', async (req: AuthenticatedRequest, res) =
      if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
 
      const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}/submit`;
-     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'POST', req.body || {});
+     const prosBaseUrl = 'https://pros.shs.com';
+
+     console.log('[SubmitOrder] ========================================');
+     console.log('[SubmitOrder] Method: POST');
+     console.log('[SubmitOrder] External URL:', `${prosBaseUrl}${endpoint}`);
+     console.log('[SubmitOrder] Body:', JSON.stringify(req.body || {}, null, 2));
+     console.log('[SubmitOrder] ========================================');
+
+     const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'POST', req.body || {}, prosBaseUrl);
+
+     console.log('[SubmitOrder] ========== EXTERNAL API RESPONSE ==========');
+     console.log('[SubmitOrder] Response:', JSON.stringify(externalResponse, null, 2));
+     console.log('[SubmitOrder] ================================================');
      return res.json(externalResponse);
    } catch (err: any) {
      return res.status(500).json({ success: false, message: err?.message || 'Failed to submit order' });

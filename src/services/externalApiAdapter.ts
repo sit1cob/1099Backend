@@ -109,8 +109,14 @@ export class ExternalApiAdapter {
   /**
    * Call external API with token
    */
-  static async callExternalApi(endpoint: string, token: string, method: string = 'GET', data?: any) {
-    const url = `${EXTERNAL_API_BASE_URL}${endpoint}`;
+  static async callExternalApi(
+    endpoint: string,
+    token: string,
+    method: string = 'GET',
+    data?: any,
+    baseUrl: string = EXTERNAL_API_BASE_URL
+  ) {
+    const url = `${baseUrl}${endpoint}`;
     
     try {
       const config: any = {
