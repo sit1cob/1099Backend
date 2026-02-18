@@ -55,6 +55,52 @@ vendorsRouter.get('/me', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// PATCH /api/vendors/me/address - NO AUTH (proxies to external API)
+// Update vendor address
+// This must be defined BEFORE the authenticateJWT() middleware
+vendorsRouter.patch('/me/address', async (req: AuthenticatedRequest, res) => {
+  try {
+    console.log('[VendorAddressUpdate] ========================================');
+    console.log('[VendorAddressUpdate] Method: PATCH');
+    console.log('[VendorAddressUpdate] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/vendors/me/address`);
+    console.log('[VendorAddressUpdate] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[VendorAddressUpdate] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        '/api/vendors/me/address',
+        token,
+        'PATCH',
+        req.body
+      );
+
+      console.log('[VendorAddressUpdate] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[VendorAddressUpdate] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[VendorAddressUpdate] ================================================');
+      console.log('[VendorAddressUpdate] ✓ Returning external API response (success or failure)');
+
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[VendorAddressUpdate] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({
+        success: false,
+        message: extErr.message || 'External API call failed'
+      });
+    }
+  } catch (err: any) {
+    console.error('[VendorAddressUpdate] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update vendor address' });
+  }
+});
+
 // GET /api/vendors/me/jobs - NO AUTH (proxies to external API)
 // This must be defined BEFORE the authenticateJWT() middleware
 vendorsRouter.get('/me/jobs', async (req: AuthenticatedRequest, res) => {

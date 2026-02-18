@@ -744,7 +744,17 @@ assignmentsRouter.post('/:id/schedule', async (req: AuthenticatedRequest, res) =
      if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
 
      const endpoint = `/api/assignments/${assignmentId}/orders`;
+     console.log('[CreateDraftOrder] ========================================');
+     console.log('[CreateDraftOrder] Method: POST');
+     console.log('[CreateDraftOrder] External URL:', `${EXTERNAL_API_URL}${endpoint}`);
+     console.log('[CreateDraftOrder] Body:', JSON.stringify(req.body, null, 2));
+     console.log('[CreateDraftOrder] ========================================');
+
      const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'POST', req.body);
+
+     console.log('[CreateDraftOrder] ========== EXTERNAL API RESPONSE ==========');
+     console.log('[CreateDraftOrder] Response:', JSON.stringify(externalResponse, null, 2));
+     console.log('[CreateDraftOrder] ================================================');
      return res.json(externalResponse);
    } catch (err: any) {
      return res.status(500).json({ success: false, message: err?.message || 'Failed to create draft order' });
@@ -797,7 +807,17 @@ assignmentsRouter.post('/:id/schedule', async (req: AuthenticatedRequest, res) =
      if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
 
      const endpoint = `/api/assignments/${assignmentId}/orders/${encodeURIComponent(orderId)}`;
+     console.log('[UpdateDraftOrderItems] ========================================');
+     console.log('[UpdateDraftOrderItems] Method: PATCH');
+     console.log('[UpdateDraftOrderItems] External URL:', `${EXTERNAL_API_URL}${endpoint}`);
+     console.log('[UpdateDraftOrderItems] Body:', JSON.stringify(req.body, null, 2));
+     console.log('[UpdateDraftOrderItems] ========================================');
+
      const externalResponse = await ExternalApiAdapter.callExternalApi(endpoint, token, 'PATCH', req.body);
+
+     console.log('[UpdateDraftOrderItems] ========== EXTERNAL API RESPONSE ==========');
+     console.log('[UpdateDraftOrderItems] Response:', JSON.stringify(externalResponse, null, 2));
+     console.log('[UpdateDraftOrderItems] ================================================');
      return res.json(externalResponse);
    } catch (err: any) {
      return res.status(500).json({ success: false, message: err?.message || 'Failed to update order items' });
