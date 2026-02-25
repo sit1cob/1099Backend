@@ -45,6 +45,13 @@ function extractUserFromToken(req: Request): { userId: string | null; vendorId: 
       return { userId: null, vendorId: null, sessionId: null };
     }
 
+    // Only attempt to decode JWT-like tokens (three dot-separated segments)
+    // Some upstream/gateway tokens may not be JWTs and will fail to decode.
+    if (token.split('.').length !== 3) {
+      console.log('[ApiAnalytics] Token is not a JWT, skipping decode for:', req.method, req.originalUrl);
+      return { userId: null, vendorId: null, sessionId: null };
+    }
+
     // Decode token without verification (for analytics only)
     const decoded = jwt.decode(token) as (JwtPayload & { _id?: string; id?: string; userId?: string | number }) | null;
     
