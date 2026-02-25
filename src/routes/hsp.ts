@@ -8,6 +8,7 @@ const HSP_API_BASE_URL =
 
 hspRouter.post('/part-orders/search', async (req, res) => {
   try {
+    const start = Date.now();
     const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
     const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
     const envToken = process.env.HSP_BEARER_TOKEN || '';
@@ -31,9 +32,19 @@ hspRouter.post('/part-orders/search', async (req, res) => {
       });
     }
 
+    const upstreamUrl = `${HSP_API_BASE_URL}/v1/api/HSPRTPartOrderService/rest/searchPartOrderDetailsList`;
+
+    console.log('[HSP] part-orders/search -> upstream POST', {
+      upstreamUrl,
+      clientId,
+      unitNumber,
+      serviceOrderNumber,
+      tokenSource: headerToken ? 'header' : envToken ? 'env' : 'none',
+    });
+
     const upstreamResponse = await axios({
       method: 'POST',
-      url: `${HSP_API_BASE_URL}/v1/api/HSPRTPartOrderService/rest/searchPartOrderDetailsList`,
+      url: upstreamUrl,
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
@@ -44,14 +55,34 @@ hspRouter.post('/part-orders/search', async (req, res) => {
         unitNumber,
         serviceOrderNumber,
       },
-      timeout: 30000,
+      timeout: 60000,
+    });
+
+    console.log('[HSP] upstream response', {
+      status: upstreamResponse.status,
+      elapsedMs: Date.now() - start,
     });
 
     return res.status(upstreamResponse.status).json(upstreamResponse.data);
   } catch (err: any) {
     const status = err?.response?.status || 502;
-    const data = err?.response?.data;
+    const upstreamData = err?.response?.data;
+    const code = err?.code || null;
     const message = err?.message || 'Failed to call HSP API';
-    return res.status(status).json({ success: false, message, upstream: data ?? null });
+
+    console.error('[HSP] upstream error', {
+      status,
+      code,
+      message,
+      upstreamData,
+    });
+
+    return res.status(status).json({
+      success: false,
+      message,
+      code,
+      upstreamStatus: err?.response?.status ?? null,
+      upstream: upstreamData ?? null,
+    });
   }
 });

@@ -18,6 +18,7 @@ import textractRouter from './routes/textract';
 import { feedbackRouter } from './routes/feedback';
 import { analyticsRouter } from './routes/analytics';
 import { hspRouter } from './routes/hsp';
+import { prosRouter } from './routes/pros';
 import axios from 'axios';
 import { apiAnalyticsLogger } from './middleware/apiAnalytics';
 
@@ -54,6 +55,7 @@ async function main() {
   app.use('/api/feedback', feedbackRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/hsp', hspRouter);
+  app.use('/api/pros', prosRouter);
 
   // Photo proxy route - mirrors external API structure
   app.get('/uploads/photos/*', async (req, res) => {
