@@ -69,6 +69,100 @@ prosRouter.post('/assignments/:assignmentId/orders/:orderId/tracking/status', as
   }
 });
 
+// POST /api/pros/assignments/:assignmentId/models/parts/search-substitute
+prosRouter.post('/assignments/:assignmentId/models/parts/search-substitute', async (req, res) => {
+  try {
+    const assignmentId = req.params.assignmentId;
+    const parts = Array.isArray(req.body?.parts) ? req.body.parts : null;
+
+    if (!parts || parts.length === 0) {
+      return res.status(422).json({ success: false, message: 'parts array is required' });
+    }
+
+    const upstreamUrl = `${PROS_API_BASE_URL}/api/assignments/${encodeURIComponent(assignmentId)}/models/parts/search-substitute`;
+
+    console.log('[PROS] models/parts/search-substitute -> upstream POST', {
+      upstreamUrl,
+      assignmentId,
+      partsCount: parts.length,
+    });
+
+    const upstreamResponse = await axios({
+      method: 'POST',
+      url: upstreamUrl,
+      headers: {
+        ...getForwardHeaders(req),
+        'Content-Type': 'application/json',
+      },
+      data: { parts },
+      timeout: 60000,
+      validateStatus: () => true,
+    });
+
+    return res.status(upstreamResponse.status).json(upstreamResponse.data);
+  } catch (err: any) {
+    const status = err?.response?.status || 502;
+    const upstreamData = err?.response?.data;
+    const code = err?.code || null;
+    const message = err?.message || 'Failed to call PROS API';
+
+    console.error('[PROS] models/parts/search-substitute upstream error', { status, code, message, upstreamData });
+
+    return res.status(status).json({
+      success: false,
+      message,
+      code,
+      upstreamStatus: err?.response?.status ?? null,
+      upstream: upstreamData ?? null,
+    });
+  }
+});
+
+// DELETE /api/pros/assignments/:assignmentId/orders/:orderId/parts/:partId
+prosRouter.delete('/assignments/:assignmentId/orders/:orderId/parts/:partId', async (req, res) => {
+  try {
+    const assignmentId = req.params.assignmentId;
+    const orderId = req.params.orderId;
+    const partId = req.params.partId;
+
+    const upstreamUrl = `${PROS_API_BASE_URL}/api/assignments/${encodeURIComponent(assignmentId)}/orders/${encodeURIComponent(orderId)}/parts/${encodeURIComponent(partId)}`;
+
+    console.log('[PROS] orders/parts -> upstream DELETE', {
+      upstreamUrl,
+      assignmentId,
+      orderId,
+      partId,
+    });
+
+    const upstreamResponse = await axios({
+      method: 'DELETE',
+      url: upstreamUrl,
+      headers: {
+        ...getForwardHeaders(req),
+      },
+      timeout: 60000,
+      validateStatus: () => true,
+    });
+
+    return res.status(upstreamResponse.status).json(upstreamResponse.data);
+  } catch (err: any) {
+    const status = err?.response?.status || 502;
+    const upstreamData = err?.response?.data;
+    const code = err?.code || null;
+    const message = err?.message || 'Failed to call PROS API';
+
+    console.error('[PROS] orders/parts upstream error', { status, code, message, upstreamData });
+
+    return res.status(status).json({
+      success: false,
+      message,
+      code,
+      upstreamStatus: err?.response?.status ?? null,
+      upstream: upstreamData ?? null,
+    });
+  }
+});
+
 // GET /api/pros/assignments/:assignmentId/orders/:orderId/tracking/part-order-details
 prosRouter.get('/assignments/:assignmentId/orders/:orderId/tracking/part-order-details', async (req, res) => {
   try {
