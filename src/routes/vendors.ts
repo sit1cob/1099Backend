@@ -264,10 +264,16 @@ vendorsRouter.get('/me/dashboard', async (req: AuthenticatedRequest, res) => {
           availableJobs: availableJobsCount,
           myJobs: myJobsCount,
           completed: completedCount,
+          assignedCount: Array.isArray(assignments) 
+            ? assignments.filter((a: any) => ['assigned', 'arrived', 'in_progress', 'waiting_on_parts', 'part_arrived'].includes(a.status)).length 
+            : 0,
           statistics: {
             availableJobsCount,
             myJobsCount,
             completedCount,
+            assignedCount: Array.isArray(assignments) 
+              ? assignments.filter((a: any) => ['assigned', 'arrived', 'in_progress', 'waiting_on_parts', 'part_arrived'].includes(a.status)).length 
+              : 0,
             inProgressCount: Array.isArray(assignments) 
               ? assignments.filter((a: any) => ['assigned', 'arrived', 'in_progress', 'waiting_on_parts', 'part_arrived'].includes(a.status)).length 
               : 0
