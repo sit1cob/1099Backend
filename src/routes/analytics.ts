@@ -22,6 +22,17 @@ const NON_API_ROUTES = ['/', '/favicon.ico', '/robots.txt', '/sitemap.xml'];
 
 export const analyticsRouter = Router();
 
+type CacheEntry<T> = {
+  value: T;
+  storedAt: number;
+  expiresAt: number;
+  refreshing?: boolean;
+  refreshPromise?: Promise<T>;
+};
+
+const analyticsUsersCache = new Map<string, CacheEntry<any>>();
+const ANALYTICS_USERS_CACHE_TTL_MS = 60 * 1000;
+
 async function buildFilters(query: QueryParams) {
   const filter: Record<string, any> = {};
   const andConditions: any[] = [
@@ -188,44 +199,100 @@ analyticsRouter.get('/users', async (req: AuthenticatedRequest, res) => {
   try {
     const query = req.query as QueryParams & { limit?: string };
     const limit = Math.min(Number(query.limit) || 100, MAX_LIMIT);
-    const filters = await buildFilters(query);
+    const cacheKey = JSON.stringify({
+      method: query.method ?? null,
+      route: query.route ?? null,
+      success: query.success ?? null,
+      userId: query.userId ?? null,
+      vendorId: query.vendorId ?? null,
+      search: query.search ?? null,
+      from: query.from ?? null,
+      to: query.to ?? null,
+      limit,
+    });
 
-    const aggregation = await ApiAnalyticsModel.aggregate([
-      { $match: filters },
-      {
-        $group: {
-          _id: { $ifNull: ['$userId', 'anonymous'] },
-          total: { $sum: 1 },
-          success: { $sum: { $cond: ['$success', 1, 0] } },
-          lastSeen: { $max: '$createdAt' },
+    const nowMs = Date.now();
+    const cached = analyticsUsersCache.get(cacheKey);
+    if (cached?.value && cached.expiresAt > nowMs) {
+      return res.json({ success: true, data: cached.value });
+    }
+
+    const compute = async () => {
+      const filters = await buildFilters(query);
+
+      if (!query.from && !query.to && !filters.createdAt) {
+        const now = new Date();
+        const fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        filters.createdAt = { $gte: fromDate };
+      }
+
+      const aggregation = await ApiAnalyticsModel.aggregate([
+        { $match: filters },
+        {
+          $group: {
+            _id: { $ifNull: ['$userId', 'anonymous'] },
+            total: { $sum: 1 },
+            success: { $sum: { $cond: ['$success', 1, 0] } },
+            lastSeen: { $max: '$createdAt' },
+          },
         },
-      },
-      { $sort: { total: -1 } },
-      { $limit: limit },
-    ]);
+        { $sort: { total: -1 } },
+        { $limit: limit },
+      ]);
 
-    const userIds: string[] = aggregation
-      .map((row: any) => String(row._id))
-      .filter((id) => id && id !== 'anonymous' && /^[0-9a-fA-F]{24}$/.test(id));
+      const userIds: string[] = aggregation
+        .map((row: any) => String(row._id))
+        .filter((id) => id && id !== 'anonymous' && /^[0-9a-fA-F]{24}$/.test(id));
 
-    const users = userIds.length
-      ? await UserModel.find({ _id: { $in: userIds } }).lean()
-      : [];
-    const userById = new Map<string, any>(users.map((u: any) => [String(u._id), u]));
+      const users = userIds.length
+        ? await UserModel.find({ _id: { $in: userIds } }).lean()
+        : [];
+      const userById = new Map<string, any>(users.map((u: any) => [String(u._id), u]));
 
-    const data = aggregation.map((row: any) => {
-      const userId = String(row._id);
-      const user = userById.get(userId);
-      return {
-        userId,
-        username: user?.username ?? null,
-        email: user?.email ?? null,
-        role: user?.role ?? null,
-        isActive: user?.isActive ?? null,
-        total: row.total ?? 0,
-        success: row.success ?? 0,
-        lastSeen: row.lastSeen,
-      };
+      return aggregation.map((row: any) => {
+        const userId = String(row._id);
+        const user = userById.get(userId);
+        return {
+          userId,
+          username: user?.username ?? null,
+          email: user?.email ?? null,
+          role: user?.role ?? null,
+          isActive: user?.isActive ?? null,
+          total: row.total ?? 0,
+          success: row.success ?? 0,
+          lastSeen: row.lastSeen,
+        };
+      });
+    };
+
+    if (cached?.value && cached.expiresAt <= nowMs) {
+      if (!cached.refreshing) {
+        const refreshPromise = compute()
+          .then((data) => {
+            analyticsUsersCache.set(cacheKey, {
+              value: data,
+              storedAt: Date.now(),
+              expiresAt: Date.now() + ANALYTICS_USERS_CACHE_TTL_MS,
+            });
+            return data;
+          })
+          .catch(() => cached.value);
+
+        analyticsUsersCache.set(cacheKey, {
+          ...cached,
+          refreshing: true,
+          refreshPromise,
+        });
+      }
+
+      return res.json({ success: true, data: cached.value });
+    }
+
+    const data = await compute();
+    analyticsUsersCache.set(cacheKey, {
+      value: data,
+      storedAt: Date.now(),
+      expiresAt: Date.now() + ANALYTICS_USERS_CACHE_TTL_MS,
     });
 
     return res.json({ success: true, data });

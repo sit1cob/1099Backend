@@ -24,12 +24,16 @@ const ApiAnalyticsSchema = new Schema(
   }
 );
 
+ApiAnalyticsSchema.index({ createdAt: -1 });
+ApiAnalyticsSchema.index({ url: 1, createdAt: -1 });
+ApiAnalyticsSchema.index({ method: 1, url: 1, createdAt: -1 });
+ApiAnalyticsSchema.index({ userId: 1, createdAt: -1 });
+ApiAnalyticsSchema.index({ vendorId: 1, createdAt: -1 });
+ApiAnalyticsSchema.index({ success: 1, createdAt: -1 });
+
 // Delete existing model from both caches to force schema refresh
 if (mongoose.models.ApiAnalytics) {
   delete mongoose.models.ApiAnalytics;
-}
-if (mongoose.connection?.models?.ApiAnalytics) {
-  delete mongoose.connection.models.ApiAnalytics;
 }
 
 export const ApiAnalyticsModel = mongoose.model('ApiAnalytics', ApiAnalyticsSchema);
