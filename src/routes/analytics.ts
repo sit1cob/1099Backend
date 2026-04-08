@@ -171,10 +171,19 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
       .map((row: any) => String(row.userId || ''))
       .filter((id) => id && /^[0-9a-fA-F]{24}$/.test(id));
 
+    const loginUsernames: string[] = aggregation
+      .map((row: any) => (row.loginUsername ? String(row.loginUsername) : ''))
+      .filter((u) => Boolean(u));
+
     const users = userIds.length
       ? await UserModel.find({ _id: { $in: userIds } }).lean()
       : [];
+    const usersByUsername = loginUsernames.length
+      ? await UserModel.find({ username: { $in: Array.from(new Set(loginUsernames)) } }).lean()
+      : [];
+
     const userById = new Map<string, any>(users.map((u: any) => [String(u._id), u]));
+    const userByUsername = new Map<string, any>(usersByUsername.map((u: any) => [String(u.username), u]));
 
     let completedByVendorId = new Map<string, number>();
     if (includeJobStats) {
@@ -187,8 +196,10 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
 
           const userId = row.userId ? String(row.userId) : null;
           const user = userId ? userById.get(userId) : null;
+          const userFromUsername = !user && row.loginUsername ? userByUsername.get(String(row.loginUsername)) : null;
           const vendorIdFromUser = user?.vendorId ? String(user.vendorId) : null;
-          return vendorIdFromUser && mongoose.isValidObjectId(vendorIdFromUser) ? vendorIdFromUser : null;
+          const vendorIdFromUserOrUsername = vendorIdFromUser || (userFromUsername?.vendorId ? String(userFromUsername.vendorId) : null);
+          return vendorIdFromUserOrUsername && mongoose.isValidObjectId(vendorIdFromUserOrUsername) ? vendorIdFromUserOrUsername : null;
         })
         .filter((id: string | null): id is string => Boolean(id));
 
@@ -209,17 +220,18 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
     const data = aggregation.map((row: any) => {
       const userId = row.userId ? String(row.userId) : null;
       const user = userId ? userById.get(userId) : null;
+      const userFromUsername = !user && row.loginUsername ? userByUsername.get(String(row.loginUsername)) : null;
       const vendorIdFromAnalytics = row.vendorId ? String(row.vendorId) : null;
-      const vendorIdFromUser = user?.vendorId ? String(user.vendorId) : null;
+      const vendorIdFromUser = (user?.vendorId ? String(user.vendorId) : null) || (userFromUsername?.vendorId ? String(userFromUsername.vendorId) : null);
       const vendorIdEffective = vendorIdFromAnalytics && mongoose.isValidObjectId(vendorIdFromAnalytics)
         ? vendorIdFromAnalytics
         : (vendorIdFromUser && mongoose.isValidObjectId(vendorIdFromUser) ? vendorIdFromUser : null);
       return {
         userId,
-        username: user?.username ?? row.loginUsername ?? null,
-        email: user?.email ?? null,
-        role: user?.role ?? null,
-        isActive: user?.isActive ?? null,
+        username: user?.username ?? userFromUsername?.username ?? row.loginUsername ?? null,
+        email: user?.email ?? userFromUsername?.email ?? null,
+        role: user?.role ?? userFromUsername?.role ?? null,
+        isActive: user?.isActive ?? userFromUsername?.isActive ?? null,
         vendorId: vendorIdEffective,
         totalLogins: row.totalLogins ?? 0,
         lastLoginAt: row.lastLoginAt,
