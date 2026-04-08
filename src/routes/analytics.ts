@@ -46,7 +46,7 @@ async function buildFilters(query: QueryParams) {
       filter.userId = query.userId;
     } else {
       // Look up user by username
-      const user = await UserModel.findOne({ username: query.userId }).lean();
+      const user: any = await UserModel.findOne({ username: query.userId }).lean();
       if (user) {
         filter.userId = user._id.toString();
       } else {
@@ -123,6 +123,57 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   } catch (err: any) {
     console.error('[Analytics] Failed to load logs:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to load analytics' });
+  }
+});
+
+analyticsRouter.get('/users', async (req: AuthenticatedRequest, res) => {
+  try {
+    const query = req.query as QueryParams & { limit?: string };
+    const limit = Math.min(Number(query.limit) || 100, MAX_LIMIT);
+    const filters = await buildFilters(query);
+
+    const aggregation = await ApiAnalyticsModel.aggregate([
+      { $match: filters },
+      {
+        $group: {
+          _id: { $ifNull: ['$userId', 'anonymous'] },
+          total: { $sum: 1 },
+          success: { $sum: { $cond: ['$success', 1, 0] } },
+          lastSeen: { $max: '$createdAt' },
+        },
+      },
+      { $sort: { total: -1 } },
+      { $limit: limit },
+    ]);
+
+    const userIds: string[] = aggregation
+      .map((row: any) => String(row._id))
+      .filter((id) => id && id !== 'anonymous' && /^[0-9a-fA-F]{24}$/.test(id));
+
+    const users = userIds.length
+      ? await UserModel.find({ _id: { $in: userIds } }).lean()
+      : [];
+    const userById = new Map<string, any>(users.map((u: any) => [String(u._id), u]));
+
+    const data = aggregation.map((row: any) => {
+      const userId = String(row._id);
+      const user = userById.get(userId);
+      return {
+        userId,
+        username: user?.username ?? null,
+        email: user?.email ?? null,
+        role: user?.role ?? null,
+        isActive: user?.isActive ?? null,
+        total: row.total ?? 0,
+        success: row.success ?? 0,
+        lastSeen: row.lastSeen,
+      };
+    });
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[Analytics] Failed to load users summary:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to load users summary' });
   }
 });
 

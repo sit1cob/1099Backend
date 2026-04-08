@@ -7,7 +7,7 @@ import { LatencyTrend } from './components/LatencyTrend';
 import { UserActivityList } from './components/UserActivityList';
 import { Pagination } from './components/Pagination';
 import { FeedbackTable } from './components/FeedbackTable';
-import { fetchAnalytics, fetchSummary, fetchFeedback } from './services/api';
+import { fetchAnalytics, fetchSummary, fetchFeedback, fetchUsers } from './services/api';
 import type { AnalyticsFilter } from './types';
 
 const defaultFilters: AnalyticsFilter = {
@@ -34,6 +34,14 @@ function App() {
     queryFn: () => fetchSummary({ userId: filters.userId, from: filters.from, to: filters.to }),
     refetchInterval: 30000,
     staleTime: 30000,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: ['analytics-users', filters.userId, filters.from, filters.to],
+    queryFn: () => fetchUsers({ userId: filters.userId, from: filters.from, to: filters.to, limit: 200 }),
+    refetchInterval: 30000,
+    staleTime: 30000,
+    enabled: activeTab === 'analytics',
   });
 
   const feedbackQuery = useQuery({
@@ -146,41 +154,29 @@ function App() {
             <FiltersPanel value={filters} onChange={setFilters} />
           </section>
 
-          <section className="mb-6 grid gap-4 md:grid-cols-3">
-            <StatCard label="Requests (24h)" value={stats.requests} helper="rolling" accent="blue" />
-            <StatCard label="Success rate" value={`${stats.successRate.toFixed(1)}%`} accent="green" />
-            <StatCard label="Avg latency" value={`${stats.avgLatency.toFixed(0)} ms`} accent="red" />
-          </section>
-
-          <section className="mb-6 grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <AnalyticsTable
-                data={analyticsQuery.data?.data ?? []}
-                isLoading={analyticsQuery.isFetching}
-              />
-              <Pagination
-                currentPage={paginationData.currentPage}
-                totalPages={paginationData.totalPages}
-                totalRecords={paginationData.totalRecords}
-                pageSize={paginationData.pageSize}
-                onPageChange={handlePageChange}
-                onPageSizeChange={handlePageSizeChange}
-              />
-              <LatencyTrend data={analyticsQuery.data?.data ?? []} />
+          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+            <div className="space-y-6">
+              <LatencyTrend data={analyticsQuery.data?.data || []} />
+              <AnalyticsTable data={analyticsQuery.data?.data || []} isLoading={analyticsQuery.isLoading} />
+              <Pagination {...paginationData} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
             </div>
             <div className="space-y-6">
               <UserActivityList
-                records={analyticsQuery.data?.data ?? []}
+                users={usersQuery.data?.data || []}
                 onSelect={(userId) =>
                   setFilters((prev) => ({
                     ...prev,
                     userId: prev.userId === userId ? undefined : userId,
+                    page: 1,
                   }))
                 }
                 selectedUser={filters.userId}
               />
+              <StatCard label="Requests" value={stats.requests.toLocaleString()} />
+              <StatCard label="Success rate" value={`${stats.successRate.toFixed(1)}%`} />
+              <StatCard label="Avg latency" value={`${stats.avgLatency.toFixed(0)}ms`} />
             </div>
-          </section>
+          </div>
         </>
       )}
 

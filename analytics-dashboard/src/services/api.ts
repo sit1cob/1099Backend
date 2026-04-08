@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AnalyticsFilter, AnalyticsResponse } from '../types';
+import type { AnalyticsFilter, AnalyticsResponse, AnalyticsUserSummary } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://app1099-api.searskairos.ai';
 
@@ -56,6 +56,24 @@ export type RoutesResponse = {
 
 export async function fetchUniqueRoutes(): Promise<RoutesResponse> {
   const { data } = await client.get<RoutesResponse>('/api/analytics/routes');
+  return data;
+}
+
+export type UsersResponse = {
+  success: boolean;
+  data: AnalyticsUserSummary[];
+};
+
+export async function fetchUsers(filter: Pick<AnalyticsFilter, 'userId' | 'from' | 'to'> & { limit?: number } = {}): Promise<UsersResponse> {
+  const params = new URLSearchParams();
+  if (filter.userId) params.append('userId', filter.userId);
+  if (filter.from) params.append('from', filter.from);
+  if (filter.to) params.append('to', filter.to);
+  if (filter.limit) params.append('limit', String(filter.limit));
+
+  const query = params.toString();
+  const endpoint = query ? `/api/analytics/users?${query}` : '/api/analytics/users';
+  const { data } = await client.get<UsersResponse>(endpoint);
   return data;
 }
 

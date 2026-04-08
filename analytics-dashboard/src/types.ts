@@ -47,3 +47,14 @@ export type AnalyticsResponse = {
   totalPages?: number;
 };
 
+export type AnalyticsUserSummary = {
+  userId: string;
+  username: string | null;
+  email: string | null;
+  role: string | null;
+  isActive: boolean | null;
+  total: number;
+  success: number;
+  lastSeen: string;
+};
+
