@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { ApiAnalyticsModel } from '../models/apiAnalytics';
 import { type AuthenticatedRequest } from '../middleware/auth';
 import { UserModel } from '../models/user';
+import mongoose from 'mongoose';
+import { JobAssignmentModel } from '../models/jobAssignment';
 
 type QueryParams = {
   limit?: string;
@@ -139,8 +141,9 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
   try {
-    const query = req.query as { limit?: string };
+    const query = req.query as { limit?: string; includeJobStats?: string };
     const limit = Math.min(Number(query.limit) || 500, MAX_LIMIT);
+    const includeJobStats = String(query.includeJobStats || '').toLowerCase() === '1' || String(query.includeJobStats || '').toLowerCase() === 'true';
 
     const aggregation = await ApiAnalyticsModel.aggregate([
       {
@@ -173,18 +176,49 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
       : [];
     const userById = new Map<string, any>(users.map((u: any) => [String(u._id), u]));
 
+    let completedByVendorId = new Map<string, number>();
+    if (includeJobStats) {
+      const vendorObjectIds = Array.from(
+        new Set(
+          aggregation
+            .map((row: any) => String(row.vendorId || ''))
+            .filter((id) => mongoose.isValidObjectId(id))
+        )
+      ).map((id) => new mongoose.Types.ObjectId(id));
+
+      if (vendorObjectIds.length) {
+        const completedAgg = await JobAssignmentModel.aggregate([
+          { $match: { vendorId: { $in: vendorObjectIds }, status: 'completed' } },
+          { $group: { _id: '$vendorId', completedJobsCount: { $sum: 1 } } },
+        ]);
+
+        completedByVendorId = new Map<string, number>(
+          completedAgg.map((row: any) => [String(row._id), Number(row.completedJobsCount || 0)])
+        );
+      }
+    }
+
     const data = aggregation.map((row: any) => {
       const userId = row.userId ? String(row.userId) : null;
       const user = userId ? userById.get(userId) : null;
+      const vendorId = row.vendorId ? String(row.vendorId) : null;
       return {
         userId,
         username: user?.username ?? row.loginUsername ?? null,
         email: user?.email ?? null,
         role: user?.role ?? null,
         isActive: user?.isActive ?? null,
-        vendorId: row.vendorId ? String(row.vendorId) : null,
+        vendorId,
         totalLogins: row.totalLogins ?? 0,
         lastLoginAt: row.lastLoginAt,
+        ...(includeJobStats
+          ? {
+              completedJobsCount:
+                vendorId && completedByVendorId.has(vendorId)
+                  ? completedByVendorId.get(vendorId)
+                  : 0,
+            }
+          : {}),
       };
     });
 

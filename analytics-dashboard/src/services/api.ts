@@ -85,6 +85,7 @@ export type LoginUsersResponse = {
 export async function fetchLoginUsers(params: { limit?: number } = {}): Promise<LoginUsersResponse> {
   const search = new URLSearchParams();
   if (params.limit) search.append('limit', String(params.limit));
+  search.append('includeJobStats', '1');
   const query = search.toString();
   const endpoint = query ? `/api/analytics/login-users?${query}` : '/api/analytics/login-users';
   const { data } = await client.get<LoginUsersResponse>(endpoint);

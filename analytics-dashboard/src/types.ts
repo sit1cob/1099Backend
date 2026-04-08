@@ -67,5 +67,6 @@ export type LoginUserSummary = {
   vendorId: string | null;
   totalLogins: number;
   lastLoginAt: string;
+  completedJobsCount?: number;
 };
 
