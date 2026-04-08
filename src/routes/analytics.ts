@@ -126,6 +126,64 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
+  try {
+    const query = req.query as { limit?: string };
+    const limit = Math.min(Number(query.limit) || 500, MAX_LIMIT);
+
+    const aggregation = await ApiAnalyticsModel.aggregate([
+      {
+        $match: {
+          method: 'POST',
+          url: { $regex: /^\/api\/auth\/login(\?|$)/ },
+          success: true,
+        },
+      },
+      {
+        $group: {
+          _id: { $ifNull: ['$userId', '$loginUsername'] },
+          userId: { $max: '$userId' },
+          loginUsername: { $max: '$loginUsername' },
+          vendorId: { $max: '$vendorId' },
+          totalLogins: { $sum: 1 },
+          lastLoginAt: { $max: '$createdAt' },
+        },
+      },
+      { $sort: { lastLoginAt: -1 } },
+      { $limit: limit },
+    ]);
+
+    const userIds: string[] = aggregation
+      .map((row: any) => String(row.userId || ''))
+      .filter((id) => id && /^[0-9a-fA-F]{24}$/.test(id));
+
+    const users = userIds.length
+      ? await UserModel.find({ _id: { $in: userIds } }).lean()
+      : [];
+    const userById = new Map<string, any>(users.map((u: any) => [String(u._id), u]));
+
+    const data = aggregation.map((row: any) => {
+      const userId = row.userId ? String(row.userId) : null;
+      const user = userId ? userById.get(userId) : null;
+      return {
+        userId,
+        username: user?.username ?? row.loginUsername ?? null,
+        email: user?.email ?? null,
+        role: user?.role ?? null,
+        isActive: user?.isActive ?? null,
+        vendorId: row.vendorId ? String(row.vendorId) : null,
+        totalLogins: row.totalLogins ?? 0,
+        lastLoginAt: row.lastLoginAt,
+      };
+    });
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[Analytics] Failed to load login users:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to load login users' });
+  }
+});
+
 analyticsRouter.get('/users', async (req: AuthenticatedRequest, res) => {
   try {
     const query = req.query as QueryParams & { limit?: string };

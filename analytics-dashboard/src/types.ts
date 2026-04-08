@@ -58,3 +58,14 @@ export type AnalyticsUserSummary = {
   lastSeen: string;
 };
 
+export type LoginUserSummary = {
+  userId: string | null;
+  username: string | null;
+  email: string | null;
+  role: string | null;
+  isActive: boolean | null;
+  vendorId: string | null;
+  totalLogins: number;
+  lastLoginAt: string;
+};
+

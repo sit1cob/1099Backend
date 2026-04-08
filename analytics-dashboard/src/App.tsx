@@ -7,7 +7,8 @@ import { LatencyTrend } from './components/LatencyTrend';
 import { UserActivityList } from './components/UserActivityList';
 import { Pagination } from './components/Pagination';
 import { FeedbackTable } from './components/FeedbackTable';
-import { fetchAnalytics, fetchSummary, fetchFeedback, fetchUsers } from './services/api';
+import { fetchAnalytics, fetchSummary, fetchFeedback, fetchUsers, fetchLoginUsers } from './services/api';
+import { LoginUsersTable } from './components/LoginUsersTable';
 import type { AnalyticsFilter } from './types';
 
 const defaultFilters: AnalyticsFilter = {
@@ -16,7 +17,7 @@ const defaultFilters: AnalyticsFilter = {
   page: 1,
 };
 
-type TabType = 'analytics' | 'feedback';
+type TabType = 'analytics' | 'unique_users' | 'feedback';
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>('analytics');
@@ -50,6 +51,14 @@ function App() {
     refetchInterval: 30000,
     staleTime: 30000,
     enabled: activeTab === 'feedback',
+  });
+
+  const loginUsersQuery = useQuery({
+    queryKey: ['analytics-login-users'],
+    queryFn: () => fetchLoginUsers({ limit: 1000 }),
+    refetchInterval: 60000,
+    staleTime: 60000,
+    enabled: activeTab === 'unique_users',
   });
 
   const stats = useMemo(() => {
@@ -145,6 +154,16 @@ function App() {
               </span>
             ) : null}
           </button>
+          <button
+            onClick={() => setActiveTab('unique_users')}
+            className={`border-b-2 px-1 pb-4 text-sm font-medium transition ${
+              activeTab === 'unique_users'
+                ? 'border-brand-600 text-brand-600'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            Unique Users
+          </button>
         </nav>
       </div>
 
@@ -192,6 +211,16 @@ function App() {
             data={feedbackQuery.data?.data ?? []}
             isLoading={feedbackQuery.isFetching}
           />
+        </section>
+      )}
+
+      {activeTab === 'unique_users' && (
+        <section className="mb-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-slate-900">Unique Login Users (Lifetime)</h2>
+            <p className="text-sm text-slate-500">Source: /api/analytics/login-users</p>
+          </div>
+          <LoginUsersTable data={loginUsersQuery.data?.data || []} isLoading={loginUsersQuery.isFetching} />
         </section>
       )}
     </div>
