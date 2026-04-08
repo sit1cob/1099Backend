@@ -178,13 +178,21 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
 
     let completedByVendorId = new Map<string, number>();
     if (includeJobStats) {
-      const vendorObjectIds = Array.from(
-        new Set(
-          aggregation
-            .map((row: any) => String(row.vendorId || ''))
-            .filter((id) => mongoose.isValidObjectId(id))
-        )
-      ).map((id) => new mongoose.Types.ObjectId(id));
+      const vendorIdStrings = aggregation
+        .map((row: any) => {
+          const vendorIdFromAnalytics = row.vendorId ? String(row.vendorId) : null;
+          if (vendorIdFromAnalytics && mongoose.isValidObjectId(vendorIdFromAnalytics)) {
+            return vendorIdFromAnalytics;
+          }
+
+          const userId = row.userId ? String(row.userId) : null;
+          const user = userId ? userById.get(userId) : null;
+          const vendorIdFromUser = user?.vendorId ? String(user.vendorId) : null;
+          return vendorIdFromUser && mongoose.isValidObjectId(vendorIdFromUser) ? vendorIdFromUser : null;
+        })
+        .filter((id: string | null): id is string => Boolean(id));
+
+      const vendorObjectIds = Array.from(new Set(vendorIdStrings)).map((id) => new mongoose.Types.ObjectId(id));
 
       if (vendorObjectIds.length) {
         const completedAgg = await JobAssignmentModel.aggregate([
@@ -201,21 +209,25 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
     const data = aggregation.map((row: any) => {
       const userId = row.userId ? String(row.userId) : null;
       const user = userId ? userById.get(userId) : null;
-      const vendorId = row.vendorId ? String(row.vendorId) : null;
+      const vendorIdFromAnalytics = row.vendorId ? String(row.vendorId) : null;
+      const vendorIdFromUser = user?.vendorId ? String(user.vendorId) : null;
+      const vendorIdEffective = vendorIdFromAnalytics && mongoose.isValidObjectId(vendorIdFromAnalytics)
+        ? vendorIdFromAnalytics
+        : (vendorIdFromUser && mongoose.isValidObjectId(vendorIdFromUser) ? vendorIdFromUser : null);
       return {
         userId,
         username: user?.username ?? row.loginUsername ?? null,
         email: user?.email ?? null,
         role: user?.role ?? null,
         isActive: user?.isActive ?? null,
-        vendorId,
+        vendorId: vendorIdEffective,
         totalLogins: row.totalLogins ?? 0,
         lastLoginAt: row.lastLoginAt,
         ...(includeJobStats
           ? {
               completedJobsCount:
-                vendorId && completedByVendorId.has(vendorId)
-                  ? completedByVendorId.get(vendorId)
+                vendorIdEffective && completedByVendorId.has(vendorIdEffective)
+                  ? completedByVendorId.get(vendorIdEffective)
                   : 0,
             }
           : {}),
