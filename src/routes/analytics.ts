@@ -4,6 +4,7 @@ import { type AuthenticatedRequest } from '../middleware/auth';
 import { UserModel } from '../models/user';
 import mongoose from 'mongoose';
 import { JobAssignmentModel } from '../models/jobAssignment';
+import { JobModel } from '../models/job';
 
 type QueryParams = {
   limit?: string;
@@ -186,6 +187,7 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
     const userByUsername = new Map<string, any>(usersByUsername.map((u: any) => [String(u.username), u]));
 
     let completedByVendorId = new Map<string, number>();
+    let completedJobsByVendorId = new Map<string, number>();
     if (includeJobStats) {
       const vendorIdStrings = aggregation
         .map((row: any) => {
@@ -214,6 +216,15 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
         completedByVendorId = new Map<string, number>(
           completedAgg.map((row: any) => [String(row._id), Number(row.completedJobsCount || 0)])
         );
+
+        const completedJobsAgg = await JobModel.aggregate([
+          { $match: { vendorId: { $in: vendorObjectIds }, status: 'completed' } },
+          { $group: { _id: '$vendorId', completedJobsCount: { $sum: 1 } } },
+        ]);
+
+        completedJobsByVendorId = new Map<string, number>(
+          completedJobsAgg.map((row: any) => [String(row._id), Number(row.completedJobsCount || 0)])
+        );
       }
     }
 
@@ -238,8 +249,15 @@ analyticsRouter.get('/login-users', async (req: AuthenticatedRequest, res) => {
         ...(includeJobStats
           ? {
               completedJobsCount:
-                vendorIdEffective && completedByVendorId.has(vendorIdEffective)
-                  ? completedByVendorId.get(vendorIdEffective)
+                vendorIdEffective
+                  ? Math.max(
+                      completedByVendorId.has(vendorIdEffective)
+                        ? (completedByVendorId.get(vendorIdEffective) as number)
+                        : 0,
+                      completedJobsByVendorId.has(vendorIdEffective)
+                        ? (completedJobsByVendorId.get(vendorIdEffective) as number)
+                        : 0
+                    )
                   : 0,
             }
           : {}),

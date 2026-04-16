@@ -19,6 +19,51 @@ function getForwardHeaders(req: any) {
   return headers;
 }
 
+// PATCH /api/pros/v3/assignments/:assignmentId
+// Proxies to https://pros.shs.com/api/v3/assignments/:assignmentId
+prosRouter.patch('/v3/assignments/:assignmentId', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    const upstreamUrl = `${PROS_API_BASE_URL}/api/v3/assignments/${encodeURIComponent(assignmentId)}`;
+
+    console.log('[PROS] v3/assignments -> upstream PATCH', {
+      upstreamUrl,
+      assignmentId,
+      body: req.body,
+    });
+
+    const upstreamResponse = await axios({
+      method: 'PATCH',
+      url: upstreamUrl,
+      headers: {
+        ...getForwardHeaders(req),
+        'Content-Type': 'application/json',
+      },
+      data: req.body,
+      timeout: 60000,
+      validateStatus: () => true,
+    });
+
+    return res.status(upstreamResponse.status).json(upstreamResponse.data);
+  } catch (err: any) {
+    const status = err?.response?.status || 502;
+    const upstreamData = err?.response?.data;
+    const code = err?.code || null;
+    const message = err?.message || 'Failed to call PROS API';
+
+    console.error('[PROS] v3/assignments upstream error', { status, code, message, upstreamData });
+
+    return res.status(status).json({
+      success: false,
+      message,
+      code,
+      upstreamStatus: err?.response?.status ?? null,
+      upstream: upstreamData ?? null,
+    });
+  }
+});
+
 // POST /api/pros/assignments/:assignmentId/orders/:orderId/tracking/status
 prosRouter.post('/assignments/:assignmentId/orders/:orderId/tracking/status', async (req, res) => {
   try {
