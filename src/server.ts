@@ -56,6 +56,7 @@ async function main() {
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/hsp', hspRouter);
   app.use('/api/pros', prosRouter);
+  app.use('/api', prosRouter);  // expose /api/v3/assignments/:id without /pros prefix
 
   // Photo proxy route - mirrors external API structure
   app.get('/uploads/photos/*', async (req, res) => {
