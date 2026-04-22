@@ -72,7 +72,7 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       let jobDetails = null;
       if (assignment.jobId) {
         try {
-          console.log('[AssignmentDetails] Fetching job details for jobId:', assignment.jobId);
+          console.log('[AssignmentDetails] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/jobs/${assignment.jobId}`);
           const jobResponse = await ExternalApiAdapter.callExternalApi(`/api/jobs/${assignment.jobId}`, token, 'GET');
           if (jobResponse.success && jobResponse.data) {
             jobDetails = jobResponse.data;
@@ -103,7 +103,7 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       // STEP 3: Fetch parts from external API (if endpoint exists)
       let parts = [];
       try {
-        console.log('[AssignmentDetails] Fetching parts for assignment:', id);
+        console.log('[AssignmentDetails] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${id}/parts`);
         const partsResponse = await ExternalApiAdapter.callExternalApi(`/api/assignments/${id}/parts`, token, 'GET');
         if (partsResponse.success && Array.isArray(partsResponse.data)) {
           parts = partsResponse.data;
