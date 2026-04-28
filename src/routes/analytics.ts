@@ -517,3 +517,18 @@ analyticsRouter.get('/export', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+analyticsRouter.delete('/cleanup', async (_req: AuthenticatedRequest, res) => {
+  try {
+    const result = await ApiAnalyticsModel.deleteMany({ url: { $not: /^\/api\// } });
+    console.log(`[Analytics] Cleanup: deleted ${result.deletedCount} non-API records`);
+    return res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `Deleted ${result.deletedCount} non-API records (bot/scanner traffic)`,
+    });
+  } catch (err: any) {
+    console.error('[Analytics] Cleanup failed:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Cleanup failed' });
+  }
+});
+

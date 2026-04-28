@@ -29,7 +29,6 @@ export function LoginUsersTable({ data, isLoading }: LoginUsersTableProps) {
         <thead className="bg-slate-50 font-semibold text-slate-500">
           <tr>
             <th className="px-4 py-3">User</th>
-            <th className="px-4 py-3">Completed jobs</th>
             <th className="px-4 py-3">Total logins</th>
             <th className="px-4 py-3">Last login</th>
           </tr>
@@ -42,9 +41,6 @@ export function LoginUsersTable({ data, isLoading }: LoginUsersTableProps) {
                 <p className="text-xs text-slate-500">
                   {row.email ? row.email : row.userId ? `id: ${row.userId}` : '—'}
                 </p>
-              </td>
-              <td className="px-4 py-3 font-semibold text-slate-900">
-                {typeof row.completedJobsCount === 'number' ? row.completedJobsCount : '—'}
               </td>
               <td className="px-4 py-3 font-semibold text-slate-900">{row.totalLogins}</td>
               <td className="px-4 py-3 text-xs text-slate-600">

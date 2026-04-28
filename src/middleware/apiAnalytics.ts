@@ -85,6 +85,11 @@ function extractUserFromToken(req: Request): { userId: string | null; vendorId: 
 }
 
 export function apiAnalyticsLogger(req: Request, res: Response, next: NextFunction) {
+  // Only log requests under /api/ — skip bot/scanner traffic and non-API paths
+  if (!req.path?.startsWith('/api/') && !req.path?.startsWith('/health')) {
+    return next();
+  }
+
   if (EXCLUDED_PREFIXES.some((prefix) => req.path?.startsWith(prefix))) {
     return next();
   }

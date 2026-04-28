@@ -9,6 +9,7 @@ import { Pagination } from './components/Pagination';
 import { FeedbackTable } from './components/FeedbackTable';
 import { fetchAnalytics, fetchSummary, fetchFeedback, fetchUsers, fetchLoginUsers } from './services/api';
 import { LoginUsersTable } from './components/LoginUsersTable';
+import { DashboardTab } from './components/dashboard/DashboardTab';
 import type { AnalyticsFilter } from './types';
 
 const defaultFilters: AnalyticsFilter = {
@@ -17,10 +18,10 @@ const defaultFilters: AnalyticsFilter = {
   page: 1,
 };
 
-type TabType = 'analytics' | 'unique_users' | 'feedback';
+type TabType = 'dashboard' | 'analytics' | 'unique_users' | 'feedback';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('analytics');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [filters, setFilters] = useState<AnalyticsFilter>(defaultFilters);
 
   const analyticsQuery = useQuery({
@@ -116,7 +117,7 @@ function App() {
             Monitor every call to the 1099 Job Board API across vendors, routes, and clients.
           </p>
         </div>
-        {activeTab === 'analytics' && (
+        {(activeTab === 'analytics' || activeTab === 'dashboard') && (
           <a
             className="rounded-full border border-brand-200 bg-white px-4 py-2 text-sm font-semibold text-brand-600 shadow-sm transition hover:bg-brand-50"
             href={exportUrl}
@@ -129,6 +130,16 @@ function App() {
       {/* Tabs */}
       <div className="mb-6 border-b border-slate-200">
         <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`border-b-2 px-1 pb-4 text-sm font-medium transition ${
+              activeTab === 'dashboard'
+                ? 'border-brand-600 text-brand-600'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            Dashboard
+          </button>
           <button
             onClick={() => setActiveTab('analytics')}
             className={`border-b-2 px-1 pb-4 text-sm font-medium transition ${
@@ -166,6 +177,10 @@ function App() {
           </button>
         </nav>
       </div>
+
+      {activeTab === 'dashboard' && (
+        <DashboardTab />
+      )}
 
       {activeTab === 'analytics' && (
         <>
