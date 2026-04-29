@@ -104,15 +104,25 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       let v3Assignment: any = null;
       try {
         const PROS_API_BASE_URL = process.env.PROS_API_BASE_URL || 'https://pros.shs.com';
-        console.log('[AssignmentDetails] Calling V3 API:', `${PROS_API_BASE_URL}/api/v3/assignments/${id}`);
-        const v3Resp = await axios.get(`${PROS_API_BASE_URL}/api/v3/assignments/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
+        const v3Url = `${PROS_API_BASE_URL}/api/v3/assignments/${id}`;
+        console.log('[AssignmentDetails] Calling V3 API:', v3Url);
+
+        // Forward same headers as PATCH proxy (Authorization + Cookie)
+        const v3Headers: Record<string, string> = {
+          Accept: 'application/json',
+        };
+        if (req.headers.authorization) v3Headers.Authorization = req.headers.authorization as string;
+        const cookie = typeof req.headers.cookie === 'string' ? req.headers.cookie : '';
+        if (cookie) v3Headers.Cookie = cookie;
+
+        const v3Resp = await axios.get(v3Url, {
+          headers: v3Headers,
           timeout: 10000,
           validateStatus: () => true,
         });
+
+        console.log('[AssignmentDetails] V3 API response status:', v3Resp.status);
+
         if (v3Resp.status === 200 && v3Resp.data) {
           v3Assignment = v3Resp.data?.data ?? v3Resp.data;
           console.log('[AssignmentDetails] ✓ V3 appliance data:', {
@@ -121,6 +131,8 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
             applianceSerial: v3Assignment.applianceSerial,
             applianceIssue: v3Assignment.applianceIssue,
           });
+        } else {
+          console.log('[AssignmentDetails] ⚠ V3 API returned:', v3Resp.status, JSON.stringify(v3Resp.data).substring(0, 200));
         }
       } catch (v3Err: any) {
         console.log('[AssignmentDetails] ℹ V3 fetch skipped:', v3Err.message);
