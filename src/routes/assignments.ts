@@ -7,6 +7,7 @@ import { OrderModel } from '../models/order';
 import { PartModel } from '../models/part';
 import { PhotoTokenModel } from '../models/photoToken';
 import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
+import { AssignmentApplianceModel } from '../models/assignmentAppliance';
 import multer from 'multer';
 import FormData from 'form-data';
 import axios from 'axios';
@@ -100,42 +101,23 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
         }
       }
 
-      // STEP 2.2: Fetch v3 assignment data to get latest appliance fields
+      // STEP 2.2: Fetch cached appliance data from MongoDB (saved by PATCH v3 proxy)
       let v3Assignment: any = null;
       try {
-        const PROS_API_BASE_URL = process.env.PROS_API_BASE_URL || 'https://pros.shs.com';
-        const v3Url = `${PROS_API_BASE_URL}/api/v3/assignments/${id}`;
-        console.log('[AssignmentDetails] Calling V3 API:', v3Url);
-
-        // Forward same headers as PATCH proxy (Authorization + Cookie)
-        const v3Headers: Record<string, string> = {
-          Accept: 'application/json',
-        };
-        if (req.headers.authorization) v3Headers.Authorization = req.headers.authorization as string;
-        const cookie = typeof req.headers.cookie === 'string' ? req.headers.cookie : '';
-        if (cookie) v3Headers.Cookie = cookie;
-
-        const v3Resp = await axios.get(v3Url, {
-          headers: v3Headers,
-          timeout: 10000,
-          validateStatus: () => true,
-        });
-
-        console.log('[AssignmentDetails] V3 API response status:', v3Resp.status);
-
-        if (v3Resp.status === 200 && v3Resp.data) {
-          v3Assignment = v3Resp.data?.data ?? v3Resp.data;
-          console.log('[AssignmentDetails] ✓ V3 appliance data:', {
-            applianceBrandname: v3Assignment.applianceBrandname,
-            applianceModel: v3Assignment.applianceModel,
-            applianceSerial: v3Assignment.applianceSerial,
-            applianceIssue: v3Assignment.applianceIssue,
+        const cached = await AssignmentApplianceModel.findOne({ assignmentId: String(id) }).lean();
+        if (cached) {
+          v3Assignment = cached;
+          console.log('[AssignmentDetails] ✓ Cached appliance data from MongoDB:', {
+            applianceBrandname: cached.applianceBrandname,
+            applianceModel: cached.applianceModel,
+            applianceSerial: cached.applianceSerial,
+            applianceIssue: cached.applianceIssue,
           });
         } else {
-          console.log('[AssignmentDetails] ⚠ V3 API returned:', v3Resp.status, JSON.stringify(v3Resp.data).substring(0, 200));
+          console.log('[AssignmentDetails] ℹ No cached appliance data for assignment', id);
         }
-      } catch (v3Err: any) {
-        console.log('[AssignmentDetails] ℹ V3 fetch skipped:', v3Err.message);
+      } catch (cacheErr: any) {
+        console.log('[AssignmentDetails] ℹ Appliance cache lookup failed:', cacheErr.message);
       }
 
       // STEP 3: Fetch parts from external API (if endpoint exists)

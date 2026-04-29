@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import axios from 'axios';
+import { AssignmentApplianceModel } from '../models/assignmentAppliance';
 
 export const prosRouter = Router();
 
@@ -44,6 +45,29 @@ prosRouter.patch('/v3/assignments/:assignmentId', async (req, res) => {
       timeout: 60000,
       validateStatus: () => true,
     });
+
+    // Save appliance fields to MongoDB so GET /api/assignments/:id can read them back
+    if (upstreamResponse.status >= 200 && upstreamResponse.status < 300) {
+      const { applianceBrandname, applianceModel, applianceSerial, applianceIssue } = req.body;
+      if (applianceBrandname || applianceModel || applianceSerial || applianceIssue) {
+        try {
+          await AssignmentApplianceModel.findOneAndUpdate(
+            { assignmentId: String(assignmentId) },
+            {
+              assignmentId: String(assignmentId),
+              ...(applianceBrandname !== undefined && { applianceBrandname }),
+              ...(applianceModel !== undefined && { applianceModel }),
+              ...(applianceSerial !== undefined && { applianceSerial }),
+              ...(applianceIssue !== undefined && { applianceIssue }),
+            },
+            { upsert: true, new: true }
+          );
+          console.log('[PROS] ✓ Saved appliance data to MongoDB for assignment', assignmentId);
+        } catch (dbErr: any) {
+          console.error('[PROS] ⚠ Failed to save appliance data to MongoDB:', dbErr.message);
+        }
+      }
+    }
 
     return res.status(upstreamResponse.status).json(upstreamResponse.data);
   } catch (err: any) {
