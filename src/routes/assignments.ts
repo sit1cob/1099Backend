@@ -100,6 +100,32 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
         }
       }
 
+      // STEP 2.2: Fetch v3 assignment data to get latest appliance fields
+      let v3Assignment: any = null;
+      try {
+        const PROS_API_BASE_URL = process.env.PROS_API_BASE_URL || 'https://pros.shs.com';
+        console.log('[AssignmentDetails] Calling V3 API:', `${PROS_API_BASE_URL}/api/v3/assignments/${id}`);
+        const v3Resp = await axios.get(`${PROS_API_BASE_URL}/api/v3/assignments/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+          timeout: 10000,
+          validateStatus: () => true,
+        });
+        if (v3Resp.status === 200 && v3Resp.data) {
+          v3Assignment = v3Resp.data?.data ?? v3Resp.data;
+          console.log('[AssignmentDetails] ✓ V3 appliance data:', {
+            applianceBrandname: v3Assignment.applianceBrandname,
+            applianceModel: v3Assignment.applianceModel,
+            applianceSerial: v3Assignment.applianceSerial,
+            applianceIssue: v3Assignment.applianceIssue,
+          });
+        }
+      } catch (v3Err: any) {
+        console.log('[AssignmentDetails] ℹ V3 fetch skipped:', v3Err.message);
+      }
+
       // STEP 3: Fetch parts from external API (if endpoint exists)
       let parts = [];
       try {
@@ -114,6 +140,23 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       }
 
       // STEP 4: Transform response to match MongoDB format
+      // Merge v3 appliance fields into job.productInfoUpdate so the GET reflects PATCH data
+      if (v3Assignment && jobDetails) {
+        const v3Info: Record<string, string | null> = {};
+        if (v3Assignment.applianceBrandname) v3Info.brand = v3Assignment.applianceBrandname;
+        if (v3Assignment.applianceModel) v3Info.modelNumber = v3Assignment.applianceModel;
+        if (v3Assignment.applianceSerial) v3Info.serialNumber = v3Assignment.applianceSerial;
+        if (v3Assignment.applianceIssue) v3Info.issue = v3Assignment.applianceIssue;
+
+        if (Object.keys(v3Info).length > 0) {
+          jobDetails.productInfoUpdate = {
+            ...(jobDetails.productInfoUpdate || {}),
+            ...v3Info,
+          };
+          console.log('[AssignmentDetails] ✓ Merged V3 appliance fields into productInfoUpdate:', v3Info);
+        }
+      }
+
       const enrichedResponse = {
         success: true,
         data: {
@@ -134,6 +177,12 @@ assignmentsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
           completionNotes: assignment.completionNotes || null,
           notes: assignment.notes || null,
           cancellationReason: assignment.cancellationReason || null,
+          ...(v3Assignment && {
+            applianceBrandname: v3Assignment.applianceBrandname || null,
+            applianceModel: v3Assignment.applianceModel || null,
+            applianceSerial: v3Assignment.applianceSerial || null,
+            applianceIssue: v3Assignment.applianceIssue || null,
+          }),
           ...(jobDetails && { job: jobDetails }),
           parts: parts,
           photos: assignment.photos || [],
