@@ -39,6 +39,10 @@ async function main() {
   app.use(cookieParser());
   app.use(apiAnalyticsLogger);
 
+  app.get('/', (_req, res) => {
+    res.json({ ok: true, service: 'job-board-mongo-api', message: 'Server is running' });
+  });
+
   app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'job-board-mongo-api' });
   });

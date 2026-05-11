@@ -25,18 +25,18 @@ export function LatencyTrend({ data }: LatencyTrendProps) {
 
   if (!chartData.length) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-700/40 bg-[#131b30] text-sm text-slate-500">
         No samples to chart yet.
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-700/40 bg-[#131b30] p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500">Latency trend</p>
-          <p className="text-lg font-semibold text-slate-900">Last {chartData.length} requests</p>
+          <p className="text-sm font-medium text-slate-400">Latency trend</p>
+          <p className="text-lg font-semibold text-white">Last {chartData.length} requests</p>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={260}>
@@ -47,7 +47,7 @@ export function LatencyTrend({ data }: LatencyTrendProps) {
               <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
           <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
           <YAxis
             dataKey="latency"
