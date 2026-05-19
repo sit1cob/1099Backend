@@ -60,85 +60,85 @@ export function FeedbackTable({ data, isLoading }: FeedbackTableProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-600 border-r-transparent"></div>
-        <p className="mt-4 text-sm text-slate-600">Loading feedback...</p>
+      <div className="rounded-xl border border-slate-700/40 bg-[#131b30] p-8 text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+        <p className="mt-4 text-[13px] text-[#82889e]">Loading feedback...</p>
       </div>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <p className="text-slate-600">No feedback submissions found.</p>
+      <div className="rounded-xl border border-dashed border-slate-700/40 bg-[#131b30] p-8 text-center">
+        <p className="text-[13px] text-[#82889e]">No feedback submissions found.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-slate-700/40 bg-[#131b30] shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50">
-              <th className="px-4 py-3 font-semibold text-slate-700">Submitted</th>
-              <th className="px-4 py-3 font-semibold text-slate-700">User ID</th>
-              <th className="px-4 py-3 font-semibold text-slate-700">Logged In User</th>
-              <th className="px-4 py-3 font-semibold text-slate-700">Device</th>
-              <th className="px-4 py-3 font-semibold text-slate-700">App Version</th>
-              <th className="px-4 py-3 font-semibold text-slate-700">Feedback</th>
+            <tr className="border-b border-slate-700/30 bg-slate-800/50">
+              <th className="px-4 py-3 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Submitted</th>
+              <th className="px-4 py-3 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">User ID</th>
+              <th className="px-4 py-3 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Logged In User</th>
+              <th className="px-4 py-3 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Device</th>
+              <th className="px-4 py-3 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">App Version</th>
+              <th className="px-4 py-3 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Feedback</th>
             </tr>
           </thead>
           <tbody>
             {sortedData.map((feedback) => (
               <tr
                 key={feedback._id}
-                className="border-b border-slate-100 transition hover:bg-slate-50"
+                className="border-b border-slate-700/30 transition hover:bg-slate-800/40"
               >
-                <td className="px-4 py-3 text-slate-600">
-                  <div className="text-xs">{formatDate(feedback.submittedAt)}</div>
+                <td className="px-4 py-3 text-[13px] text-[#8498b7] font-mono">
+                  {formatDate(feedback.submittedAt)}
                 </td>
                 <td className="px-4 py-3">
                   {feedback.userId ? (
-                    <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                    <code className="rounded bg-slate-800/60 px-2 py-1 text-[13px] text-[#8498b7] font-mono">
                       {feedback.userId}
                     </code>
                   ) : (
-                    <span className="text-xs text-slate-400">null</span>
+                    <span className="text-[13px] text-[#82889e]">null</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   {feedback.user ? (
-                    <div className="text-xs">
-                      <div className="font-medium text-slate-900">{feedback.user.username}</div>
+                    <div>
+                      <div className="text-[13px] font-semibold text-[#e6edf8]">{feedback.user.username}</div>
                       {feedback.user.email && (
-                        <div className="text-slate-500">{feedback.user.email}</div>
+                        <div className="text-[11px] text-[#82889e] font-mono">{feedback.user.email}</div>
                       )}
                       {feedback.user.vendorId && (
-                        <div className="text-slate-400">Vendor: {feedback.user.vendorId}</div>
+                        <div className="text-[11px] text-[#82889e] font-mono">Vendor: {feedback.user.vendorId}</div>
                       )}
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-400">-</span>
+                    <span className="text-[13px] text-[#82889e]">-</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-slate-600">
-                  <div className="text-xs">
-                    <div className="font-medium">{feedback.metadata.deviceModel}</div>
-                    <div className="text-slate-500">{feedback.metadata.osVersion}</div>
+                <td className="px-4 py-3">
+                  <div>
+                    <div className="text-[13px] font-medium text-[#e6edf8]">{feedback.metadata.deviceModel}</div>
+                    <div className="text-[11px] text-[#82889e]">{feedback.metadata.osVersion}</div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
+                  <span className="rounded-full bg-blue-500/20 px-2 py-1 text-[11px] font-semibold text-blue-400">
                     v{feedback.metadata.appVersion}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="space-y-1">
                     {feedback.answers.map((answer, idx) => (
-                      <div key={idx} className="text-xs">
-                        <span className="font-medium text-slate-700">Q{idx + 1}:</span>{' '}
-                        <span className="text-slate-600">{getAnswerText(answer)}</span>
+                      <div key={idx} className="text-[13px]">
+                        <span className="font-medium text-[#e6edf8]">Q{idx + 1}:</span>{' '}
+                        <span className="text-[#8498b7]">{getAnswerText(answer)}</span>
                       </div>
                     ))}
                   </div>

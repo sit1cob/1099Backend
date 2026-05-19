@@ -144,3 +144,15 @@ export async function fetchVendorJobs(vendorId: number): Promise<VendorJobsRespo
   );
   return data;
 }
+
+export async function fetchVendorJobsRange(
+  vendorId: number,
+  startDate: string,
+  endDate: string,
+): Promise<any> {
+  const { data } = await prosClient.get(
+    `/api/dashboard/vendors/${vendorId}/jobs/range`,
+    { params: { startDate, endDate } },
+  );
+  return data;
+}

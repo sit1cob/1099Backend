@@ -4,9 +4,9 @@ type HeaderProps = {
 
 export function Header({ activePage = 'Overview' }: HeaderProps) {
   return (
-    <header className="h-14 bg-[#0f1628] border-b border-slate-700/50 flex items-center justify-between px-6">
+    <header className="h-14 bg-[#0b1526] border-b border-[rgba(148,163,184,0.15)] flex items-center justify-between px-6">
       <div className="flex items-center gap-3">
-        <h2 className="text-sm font-semibold text-white">{activePage}</h2>
+        <h2 className="text-[13px] font-semibold text-[#e6edf8]">{activePage}</h2>
         <span className="text-slate-500">/</span>
         <div className="relative">
           <input

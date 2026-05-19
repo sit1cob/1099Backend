@@ -10,9 +10,10 @@ type NavItem = {
 type SidebarProps = {
   activeItem: string;
   onNavigate: (label: string) => void;
+  feedbackCount?: number;
 };
 
-export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
+export function Sidebar({ activeItem, onNavigate, feedbackCount }: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: 'OPERATIONS',
@@ -49,7 +50,7 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
       items: [
         {
           label: 'Feedback',
-          badge: 67,
+          badge: feedbackCount ?? 0,
           badgeStyle: 'green',
           icon: (
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -113,7 +114,7 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[220px] bg-[#0b1120] flex flex-col z-50">
+    <aside className="fixed left-0 top-0 h-screen w-[220px] bg-[#060d1c] flex flex-col z-50">
       {/* Logo */}
       <div className="px-5 py-5 flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
@@ -126,7 +127,7 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
         </div>
         <div>
           <p className="text-[15px] font-bold text-white leading-tight">Sears KAIros</p>
-          <p className="text-[11px] text-slate-400">1099 Operations</p>
+          <p className="text-[11px] text-[#747a90]">1099 Operations</p>
         </div>
       </div>
 
@@ -137,7 +138,7 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
         {navSections.map((section) => (
           <div key={section.title}>
-            <p className="px-3 mb-3 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+            <p className="px-3 mb-3 text-[11px] font-semibold tracking-[0.6px] text-[#747a90] uppercase">
               {section.title}
             </p>
             <ul className="space-y-1">
@@ -145,10 +146,10 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
                 <li key={item.label}>
                   <button
                     onClick={() => onNavigate(item.label)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-all ${
                       activeItem === item.label
-                        ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-600/20'
-                        : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                        ? 'bg-blue-600/90 text-white font-semibold shadow-lg shadow-blue-600/20'
+                        : 'text-[rgba(255,255,255,.65)] font-medium hover:bg-[#0e1a2e] hover:text-white'
                     }`}
                   >
                     {item.icon}
@@ -166,15 +167,15 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
       <div className="px-4 py-4 border-t border-slate-700/50">
         <div className="flex items-center gap-1.5 mb-3">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="text-[11px] text-slate-400">Live &middot; 0s ago</span>
+          <span className="text-[11px] text-[#747a90] font-mono">Live &middot; 0s ago</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[11px] font-bold">
             SD
           </div>
           <div className="flex-1">
-            <p className="text-[12px] font-semibold text-white leading-tight">S. Dangir</p>
-            <p className="text-[10px] text-slate-400">Operations Lead</p>
+            <p className="text-[13px] font-semibold text-white leading-tight">S. Dangir</p>
+            <p className="text-[11px] text-[#747a90]">Operations Lead</p>
           </div>
           <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />

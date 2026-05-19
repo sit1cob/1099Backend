@@ -135,13 +135,13 @@ export function LiveEvents() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Live Events</h2>
-          <p className="text-sm text-slate-500">Real-time API activity — auto-refreshes every 5s</p>
+          <h2 className="text-[24px] font-bold text-[#e6edf8] leading-tight">Live Events</h2>
+          <p className="text-[13px] text-[#8498b7]">Real-time API activity — auto-refreshes every 5s</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full border" style={{ background: 'rgba(65,173,72,.14)', borderColor: 'rgba(65,173,72,.40)' }}>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-slate-500">Live</span>
+            <span className="text-[11px] font-semibold" style={{ color: '#80c884' }}>Live</span>
           </span>
         </div>
       </div>
@@ -149,20 +149,20 @@ export function LiveEvents() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-[#131b30] rounded-xl border border-slate-700/40 px-4 py-3">
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Events</p>
-          <p className="text-2xl font-bold text-white">{events.length}</p>
+          <p className="text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Total Events</p>
+          <p className="text-2xl font-bold text-white font-mono" style={{ letterSpacing: '-0.5px' }}>{events.length}</p>
         </div>
         <div className="bg-[#131b30] rounded-xl border border-slate-700/40 px-4 py-3">
-          <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Successful</p>
-          <p className="text-2xl font-bold text-emerald-400">{successCount}</p>
+          <p className="text-[11px] font-semibold text-emerald-500 uppercase tracking-[0.4px]">Successful</p>
+          <p className="text-2xl font-bold text-emerald-400 font-mono" style={{ letterSpacing: '-0.5px' }}>{successCount}</p>
         </div>
         <div className="bg-[#131b30] rounded-xl border border-slate-700/40 px-4 py-3">
-          <p className="text-[10px] font-semibold text-red-400 uppercase tracking-wider">Failed</p>
-          <p className="text-2xl font-bold text-red-400">{failCount}</p>
+          <p className="text-[11px] font-semibold text-red-400 uppercase tracking-[0.4px]">Failed</p>
+          <p className="text-2xl font-bold text-red-400 font-mono" style={{ letterSpacing: '-0.5px' }}>{failCount}</p>
         </div>
         <div className="bg-[#131b30] rounded-xl border border-slate-700/40 px-4 py-3">
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Avg Latency</p>
-          <p className="text-2xl font-bold text-white">{avgLatency}<span className="text-sm font-normal text-slate-400">ms</span></p>
+          <p className="text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Avg Latency</p>
+          <p className="text-2xl font-bold text-white font-mono" style={{ letterSpacing: '-0.5px' }}>{avgLatency}<span className="text-[13px] font-normal text-[#8498b7]">ms</span></p>
         </div>
       </div>
 
@@ -171,7 +171,7 @@ export function LiveEvents() {
 
       {/* Filter bar */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500">Filter:</span>
+        <span className="text-[13px] text-[#82889e]">Filter:</span>
         {methods.map((m) => (
           <button
             key={m}
@@ -194,7 +194,7 @@ export function LiveEvents() {
       {/* Events table */}
       <div className="bg-[#131b30] rounded-xl border border-slate-700/40 overflow-hidden">
         {/* Table header */}
-        <div className="flex items-center gap-3 px-5 py-2.5 bg-slate-800/50 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-700/30">
+        <div className="flex items-center gap-3 px-5 py-2.5 bg-slate-800/50 text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px] border-b border-slate-700/30">
           <span className="w-2" />
           <span className="w-14">Method</span>
           <span className="flex-1">Endpoint</span>

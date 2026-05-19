@@ -14,10 +14,10 @@ export default {
           900: '#0f172a'
         },
         sidebar: {
-          bg: '#0f1535',
-          hover: '#1a2147',
-          active: '#243056',
-          text: '#8b92ab',
+          bg: '#060d1c',
+          hover: '#0e1a2e',
+          active: '#162236',
+          text: '#747a90',
           textActive: '#ffffff',
         },
         kpi: {
@@ -26,10 +26,42 @@ export default {
           orange: '#f59e0b',
           red: '#ef4444',
           purple: '#8b5cf6',
-        }
+        },
+        card: '#162236',
+        'app-bg': '#0e1a2e',
+        topbar: '#0b1526',
+        tx1: '#e6edf8',
+        tx2: '#8498b7',
+        tx3: '#82889e',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ["'IBM Plex Sans'", 'system-ui', 'sans-serif'],
+        mono: ["'IBM Plex Mono'", "'Courier New'", 'monospace'],
+      },
+      fontSize: {
+        'xs-tk': ['11px', { lineHeight: '1' }],
+        'sm-tk': ['12px', { lineHeight: '1.5' }],
+        'base-tk': ['13px', { lineHeight: '1.5' }],
+        'md-tk': ['14px', { lineHeight: '1.25' }],
+        'lg-tk': ['16px', { lineHeight: '1.25' }],
+        'xl-tk': ['20px', { lineHeight: '1.25' }],
+        '2xl-tk': ['24px', { lineHeight: '1.25' }],
+        '3xl-tk': ['32px', { lineHeight: '1' }],
+      },
+      borderRadius: {
+        'sm-tk': '8px',
+        'tk': '14px',
+        'lg-tk': '18px',
+        'xl-tk': '24px',
+        'pill': '999px',
+      },
+      spacing: {
+        'sp-1': '4px',
+        'sp-2': '8px',
+        'sp-3': '16px',
+        'sp-4': '24px',
+        'sp-5': '32px',
+        'sp-6': '48px',
       }
     }
   },

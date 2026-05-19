@@ -54,7 +54,7 @@ const LINE_CONFIG = [
 type TrendPeriod = 'week' | 'month' | 'year';
 
 // ─── Main Component ──────────────────────────────────────────────────
-export function OverviewPage() {
+export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const [startDate, setStartDate] = useState('2026-03-30');
   const [endDate, setEndDate] = useState('2026-04-29');
   const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>('month');
@@ -199,29 +199,12 @@ export function OverviewPage() {
     const total = (sc?.JOB_CLAIMED ?? 0) + (sc?.JOB_ARRIVED ?? 0) + completed + rescheduled + partOrders;
     const lowVendors = 0;
     items.push({
-      icon: '⚠',
+      icon: 'warn',
       color: 'bg-amber-500/20 text-amber-400',
       text: `${lowVendors} vendors below 20% completion`,
       detail: '— review assignments and consider reassignment',
       btn: 'Review →',
     });
-    items.push({
-      icon: '🔧',
-      color: 'bg-blue-500/20 text-blue-400',
-      text: `${partOrders.toLocaleString()} jobs blocked on parts`,
-      detail: '— undefined renders pending in multi-sourcing pipeline',
-      btn: 'View Parts →',
-    });
-    if (total > 0) {
-      const failRate = total > 0 ? Math.round((rescheduled / total) * 100) : 0;
-      items.push({
-        icon: '📊',
-        color: 'bg-purple-500/20 text-purple-400',
-        text: `Reschedule failure rate at ${failRate}%`,
-        detail: `— ${rescheduled.toLocaleString()} failed of ${total.toLocaleString()} requests — investigate processing pipeline`,
-        btn: 'View Quality →',
-      });
-    }
     return items;
   }, [sc]);
 
@@ -240,8 +223,8 @@ export function OverviewPage() {
       {/* Title + Date Range */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Job Board Dashboard</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-[24px] font-bold text-[#e6edf8] leading-tight">Job Board Dashboard</h1>
+          <p className="text-[13px] text-[#8498b7]">
             Live data from <span className="text-blue-400">pros.shs.com</span> — vendor counts, job statuses, completion metrics
           </p>
         </div>
@@ -276,29 +259,47 @@ export function OverviewPage() {
         {kpiCards.map((card) => (
           <div key={card.key} className={`rounded-xl p-4 ${card.bg} relative overflow-hidden`}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold tracking-wider text-white/70 uppercase">{card.label}</p>
+              <p className="text-[11px] font-semibold tracking-[0.4px] text-white uppercase">{card.label}</p>
               <span className="text-white/40">{card.icon}</span>
             </div>
-            <p className="text-2xl font-bold text-white">{card.value}</p>
-            <p className="text-[10px] text-white/50 mt-0.5">{card.sub}</p>
+            <p className="font-bold text-white font-mono" style={{ fontSize: 'clamp(20px, 2vw, 32px)', letterSpacing: '-0.5px', lineHeight: 1 }}>{card.value}</p>
+            <p className="text-[11px] text-[#8498b7] mt-1">{card.sub}</p>
           </div>
         ))}
       </div>
 
       {/* Recommended Actions */}
       <div>
-        <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-3">Recommended Actions</p>
+        <p className="text-[11px] font-semibold tracking-[0.6px] text-[#82889e] uppercase mb-3">Recommended Actions</p>
         <div className="space-y-2">
           {actions.map((a, i) => (
             <div key={i} className="flex items-center gap-3 rounded-xl bg-[#131b30] border border-slate-700/40 px-5 py-3">
-              <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${a.color}`}>
-                {a.icon}
+              <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${a.color}`}>
+                {a.icon === 'warn' && (
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.13 0 1.85-1.22 1.28-2.18L13.28 3.18c-.56-.95-1.99-.95-2.56 0L3.79 16.82c-.57.96.14 2.18 1.28 2.18z" />
+                  </svg>
+                )}
+                {a.icon === 'parts' && (
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                )}
+                {a.icon === 'resched' && (
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9" />
+                  </svg>
+                )}
               </span>
               <div className="flex-1">
-                <span className="text-sm font-semibold text-white">{a.text}</span>
-                <span className="text-sm text-slate-500">{a.detail}</span>
+                <span className="text-[13px] font-bold text-[#e6edf8]">{a.text}</span>
+                <span className="text-[13px] font-normal text-[#8498b7]">{a.detail}</span>
               </div>
-              <button className="text-xs font-medium text-slate-400 hover:text-white border border-slate-600/50 rounded-lg px-3 py-1.5 transition hover:bg-slate-700/50">
+              <button
+                onClick={() => onNavigate?.('Operations')}
+                className="text-xs font-medium text-slate-400 hover:text-white border border-slate-600/50 rounded-lg px-3 py-1.5 transition hover:bg-slate-700/50"
+              >
                 {a.btn}
               </button>
             </div>
@@ -310,8 +311,8 @@ export function OverviewPage() {
       <div className="rounded-xl bg-[#131b30] border border-slate-700/40 p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">Job Status Trend</h3>
-            <p className="text-[11px] text-slate-500">5 series &middot; month view</p>
+            <h3 className="text-[14px] font-semibold text-[#e6edf8]">Job Status Trend</h3>
+            <p className="text-[13px] text-[#82889e]">Job count &middot; {trendPeriod} view</p>
           </div>
           <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5">
             <button className="px-2.5 py-1 text-[11px] text-slate-400 rounded">◆ Data</button>
@@ -345,7 +346,7 @@ export function OverviewPage() {
                 tickFormatter={formatLabel}
                 stroke="#334155"
               />
-              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} stroke="#334155" />
+              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} stroke="#334155" label={{ value: 'Job count', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11, dx: -5 }} />
               <Tooltip
                 contentStyle={{
                   borderRadius: 12,
@@ -380,10 +381,10 @@ export function OverviewPage() {
         <div className="rounded-xl bg-[#131b30] border border-slate-700/40 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">Completed by Vendor</h3>
+              <h3 className="text-[14px] font-semibold text-[#e6edf8]">Completed by Vendor</h3>
               {completedOverall !== undefined && (
-                <p className="text-[11px] text-slate-500">
-                  Total: <span className="text-emerald-400 font-semibold">{completedOverall.toLocaleString()}</span>
+                <p className="text-[13px] text-[#82889e]">
+                  Total: <span className="text-emerald-400 font-semibold font-mono">{completedOverall.toLocaleString()}</span>
                 </p>
               )}
             </div>
@@ -397,7 +398,7 @@ export function OverviewPage() {
           </div>
           <div className="max-h-[380px] overflow-y-auto">
             <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-800/80 text-[10px] uppercase text-slate-500">
+              <thead className="sticky top-0 bg-slate-800/80 text-[11px] uppercase text-[#82889e] tracking-[0.4px] font-semibold">
                 <tr>
                   <th className="px-5 py-2">#</th>
                   <th className="px-5 py-2">Vendor</th>
@@ -417,15 +418,15 @@ export function OverviewPage() {
                       className="cursor-pointer hover:bg-slate-800/40 transition"
                       onClick={() => setSelectedVendor({ id: v.vendorId, name: v.vendorName })}
                     >
-                      <td className="px-5 py-2.5 text-slate-500">{i + 1}</td>
+                      <td className="px-5 py-2.5 text-[13px] text-[#82889e] font-mono">{i + 1}</td>
                       <td className="px-5 py-2.5">
-                        <span className="text-slate-200 font-medium">{v.vendorName}</span>
-                        <span className="block text-[10px] text-slate-500">ID: {v.vendorId}</span>
+                        <span className="text-[13px] text-[#e6edf8] font-semibold">{v.vendorName}</span>
+                        <span className="block text-[11px] text-[#82889e] font-mono">ID: {v.vendorId}</span>
                       </td>
-                      <td className="px-5 py-2.5 text-right text-emerald-400 font-semibold">
+                      <td className="px-5 py-2.5 text-right text-[13px] text-emerald-400 font-semibold font-mono">
                         {v.completedCount.toLocaleString()}
                       </td>
-                      <td className="px-5 py-2.5 text-right text-slate-400">
+                      <td className="px-5 py-2.5 text-right text-[13px] text-[#8498b7] font-mono">
                         {completedOverall ? `${((v.completedCount / completedOverall) * 100).toFixed(1)}%` : '—'}
                       </td>
                     </tr>
@@ -440,9 +441,9 @@ export function OverviewPage() {
         <div className="rounded-xl bg-[#131b30] border border-slate-700/40 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">All Vendors</h3>
+              <h3 className="text-[14px] font-semibold text-[#e6edf8]">All Vendors</h3>
               {pagination && (
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[13px] text-[#82889e]">
                   Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
                 </p>
               )}
@@ -463,7 +464,7 @@ export function OverviewPage() {
           </div>
           <div className="max-h-[380px] overflow-y-auto">
             <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-800/80 text-[10px] uppercase text-slate-500">
+              <thead className="sticky top-0 bg-slate-800/80 text-[11px] uppercase text-[#82889e] tracking-[0.4px] font-semibold">
                 <tr>
                   <th className="px-4 py-2">ID</th>
                   <th className="px-4 py-2">Name</th>
@@ -480,11 +481,11 @@ export function OverviewPage() {
                 ) : (
                   vendors.map((v) => (
                     <tr key={v.id} className="hover:bg-slate-800/40 transition">
-                      <td className="px-4 py-2.5 text-slate-500">{v.id}</td>
-                      <td className="px-4 py-2.5 text-slate-200 font-medium">{v.name}</td>
-                      <td className="px-4 py-2.5 text-slate-400">{v.username}</td>
-                      <td className="px-4 py-2.5 text-slate-400">{v.phone}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-500">
+                      <td className="px-4 py-2.5 text-[13px] text-[#82889e] font-mono">{v.id}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#e6edf8] font-semibold">{v.name}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#8498b7]">{v.username}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#8498b7] font-mono">{v.phone}</td>
+                      <td className="px-4 py-2.5 text-[13px] text-[#82889e] font-mono">
                         {v.lastLoginAt
                           ? format(new Date(v.lastLoginAt), 'MMM d, yyyy h:mm a')
                           : 'Never'}
