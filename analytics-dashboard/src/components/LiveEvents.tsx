@@ -162,7 +162,7 @@ export function LiveEvents() {
         </div>
         <div className="bg-[#131b30] rounded-xl border border-slate-700/40 px-4 py-3">
           <p className="text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.4px]">Avg Latency</p>
-          <p className="text-2xl font-bold text-white font-mono" style={{ letterSpacing: '-0.5px' }}>{avgLatency}<span className="text-[13px] font-normal text-[#8498b7]">ms</span></p>
+          <p className="text-2xl font-bold text-white font-mono" style={{ letterSpacing: '-0.5px' }}>{avgLatency}<span className="text-[13px] font-normal text-[#8498b7] ml-1">ms</span></p>
         </div>
       </div>
 

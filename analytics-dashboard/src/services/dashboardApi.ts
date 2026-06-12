@@ -1,9 +1,15 @@
 import axios from 'axios';
 
 const PROS_BASE_URL = 'https://pros.shs.com';
+const BACKEND_BASE_URL = 'https://1099backend.searskairos.ai';
 
 const prosClient = axios.create({
   baseURL: PROS_BASE_URL,
+  timeout: 30000,
+});
+
+const backendClient = axios.create({
+  baseURL: BACKEND_BASE_URL,
   timeout: 30000,
 });
 
@@ -63,6 +69,41 @@ export type StatusCounts = {
   JOB_COMPLETED: number;
   JOB_RESCHEDULED: number;
   PART_ORDER_SUBMITTED: number;
+  FIRST_TIME_FIX?: number;
+};
+
+export type VendorStatusRow = {
+  vendorId: number;
+  vendorName: string;
+  statusCounts: {
+    JOB_CLAIMED: number;
+    JOB_COMPLETED: number;
+    JOB_RESCHEDULED: number;
+    PART_ORDER_SUBMITTED: number;
+    FIRST_TIME_FIX: number;
+  };
+};
+
+export type VendorStatusRangeResponse = {
+  success: boolean;
+  data: {
+    data: VendorStatusRow[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+    totals: {
+      totalVendors: number;
+      JOB_CLAIMED: number;
+      JOB_COMPLETED: number;
+      JOB_RESCHEDULED: number;
+      PART_ORDER_SUBMITTED: number;
+      FIRST_TIME_FIX: number;
+    };
+  };
+  message: string;
 };
 
 export type StatusCountsResponse = {
@@ -134,6 +175,18 @@ export async function fetchStatusTimeSeries(
 ): Promise<TimeSeriesResponse> {
   const { data } = await prosClient.get<TimeSeriesResponse>('/api/dashboard/jobs/status-counts', {
     params: { period },
+  });
+  return data;
+}
+
+export async function fetchVendorStatusRange(params: {
+  startDate: string;
+  endDate: string;
+  page?: number;
+  limit?: number;
+}): Promise<VendorStatusRangeResponse> {
+  const { data } = await backendClient.get<VendorStatusRangeResponse>('/api/dashboard/vendors/jobs/range', {
+    params,
   });
   return data;
 }

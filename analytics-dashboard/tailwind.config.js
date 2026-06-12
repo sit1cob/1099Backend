@@ -35,8 +35,8 @@ export default {
         tx3: '#82889e',
       },
       fontFamily: {
-        sans: ["'IBM Plex Sans'", 'system-ui', 'sans-serif'],
-        mono: ["'IBM Plex Mono'", "'Courier New'", 'monospace'],
+        sans: ["'Inter'", 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ["'Geist Mono'", 'ui-monospace', "'SF Mono'", 'Menlo', 'monospace'],
       },
       fontSize: {
         'xs-tk': ['11px', { lineHeight: '1' }],

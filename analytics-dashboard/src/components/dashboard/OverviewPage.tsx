@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -6,9 +6,7 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import {
@@ -17,52 +15,114 @@ import {
   fetchCompletedJobs,
   fetchStatusCounts,
   fetchStatusTimeSeries,
-  fetchVendorJobs,
+  fetchVendorStatusRange,
 } from '../../services/dashboardApi';
 import type {
-  StatusCounts,
   TimeSeriesPoint,
   CompletedVendor,
+  VendorStatusRow,
   Vendor,
 } from '../../services/dashboardApi';
 
-// ─── KPI Card Configs ────────────────────────────────────────────────
+// ─── KPI Card Config ─────────────────────────────────────────────────
 type KpiConfig = {
   key: string;
   label: string;
   sub: string;
-  bg: string;
-  icon: React.ReactNode;
+  iconPath: string;
+  kc: string;
+  kcRgb: string;
+  delta?: string;
+  deltaUp?: boolean;
+  useDateRange?: boolean;
 };
 
-const cardIcon = (d: string) => (
-  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-  </svg>
-);
-
 // ─── Trend Chart Config ──────────────────────────────────────────────
-const LINE_CONFIG = [
-  { key: 'UNCLAIMED', label: 'Unclaimed', color: '#ef4444' },
-  { key: 'JOB_CLAIMED', label: 'Claimed', color: '#3b82f6' },
-  { key: 'JOB_ARRIVED', label: 'Arrived', color: '#f59e0b' },
-  { key: 'JOB_COMPLETED', label: 'Completed', color: '#10b981' },
-  { key: 'JOB_RESCHEDULED', label: 'Rescheduled', color: '#f97316' },
-  { key: 'PART_ORDER_SUBMITTED', label: 'Part Orders', color: '#8b5cf6' },
+const LINE_SERIES = [
+  { key: 'JOB_CLAIMED', label: 'Claimed', color: '#5484d1' },
+  { key: 'JOB_ARRIVED', label: 'Arrived', color: '#d57033' },
+  { key: 'JOB_COMPLETED', label: 'Completed', color: '#67BD6D' },
+  { key: 'JOB_RESCHEDULED', label: 'Rescheduled', color: '#D95459' },
+  { key: 'PART_ORDER_SUBMITTED', label: 'Part Orders', color: '#8b61ae' },
 ];
 
-type TrendPeriod = 'week' | 'month' | 'year';
+type TrendRange = 'page' | '7d' | '30d' | '12m' | 'custom';
+type TrendView = 'chart' | 'table';
+type TrendGroupBy = 'day' | 'week' | 'month';
+
+// ─── Fmt helper ──────────────────────────────────────────────────────
+const fmt = (n: number | undefined) => n?.toLocaleString() ?? '—';
 
 // ─── Main Component ──────────────────────────────────────────────────
 export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
-  const [startDate, setStartDate] = useState('2026-03-30');
-  const [endDate, setEndDate] = useState('2026-04-29');
-  const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>('month');
+  const [startDate, setStartDate] = useState('2026-05-16');
+  const [endDate, setEndDate] = useState('2026-06-12');
+  const [trendRange, setTrendRange] = useState<TrendRange>('page');
+  const [trendView, setTrendView] = useState<TrendView>('chart');
+  const [trendGroupBy, setTrendGroupBy] = useState<TrendGroupBy>('day');
   const [vendorPage, setVendorPage] = useState(1);
   const [vendorSearch, setVendorSearch] = useState('');
+  const [vbdSearch, setVbdSearch] = useState('');
+  const [vbdPage, setVbdPage] = useState(1);
   const [selectedVendor, setSelectedVendor] = useState<{ id: number; name?: string } | null>(null);
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
+  const [vendorDropdownSearch, setVendorDropdownSearch] = useState('');
+  const [trendFrom, setTrendFrom] = useState('2026-05-16');
+  const [trendTo, setTrendTo] = useState('2026-06-12');
+  const vendorDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close vendor dropdown on click outside
+  useEffect(() => {
+    if (!vendorDropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(e.target as Node)) {
+        setVendorDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [vendorDropdownOpen]);
 
   const dateParams = startDate && endDate ? { startDate, endDate } : undefined;
+  const trendPeriod = trendRange === '7d' ? 'week' as const : trendRange === '12m' ? 'year' as const : 'month' as const;
+
+  // Which granularities are valid for the active range
+  const validGrains = useMemo((): TrendGroupBy[] => {
+    if (trendRange === '12m') return ['month'];
+    if (trendRange === '7d') return ['day'];
+    if (trendRange === '30d') return ['day', 'week'];
+    if (trendRange === 'custom') {
+      const from = new Date(trendFrom + 'T00:00:00');
+      const to = new Date(trendTo + 'T00:00:00');
+      const span = Math.round((to.getTime() - from.getTime()) / 864e5) + 1;
+      return span >= 14 ? ['day', 'week'] : ['day'];
+    }
+    // 'page'
+    const from = new Date(startDate + 'T00:00:00');
+    const to = new Date(endDate + 'T00:00:00');
+    const span = Math.round((to.getTime() - from.getTime()) / 864e5) + 1;
+    return span >= 14 ? ['day', 'week'] : ['day'];
+  }, [trendRange, trendFrom, trendTo, startDate, endDate]);
+
+  // Auto-snap grain to a valid option when range changes
+  const handleRangeChange = (r: TrendRange) => {
+    setTrendRange(r);
+    // Pre-compute valid grains for the new range
+    let valid: TrendGroupBy[];
+    if (r === '12m') valid = ['month'];
+    else if (r === '7d') valid = ['day'];
+    else if (r === '30d') valid = ['day', 'week'];
+    else valid = ['day', 'week'];
+    if (!valid.includes(trendGroupBy)) setTrendGroupBy(valid[0]);
+  };
+
+  // Formatted date range for display
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
+  };
+  const dateRangeLabel = `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
 
   // ── Data queries ──
   const vendorCountQ = useQuery({
@@ -96,79 +156,97 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
     staleTime: 60000,
   });
 
-  const vendorDetailQ = useQuery({
-    queryKey: ['dash-vendor-detail', selectedVendor?.id],
-    queryFn: () => fetchVendorJobs(selectedVendor!.id),
-    enabled: !!selectedVendor,
-    staleTime: 30000,
+  const vbdQ = useQuery({
+    queryKey: ['dash-vbd', startDate, endDate],
+    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: 1, limit: 1000 }),
+    staleTime: 60000,
   });
 
   // ── Derived ──
   const sc = statusQ.data?.data;
   const vendorCount = vendorCountQ.data?.data?.total;
   const completedOverall = completedQ.data?.data?.overall;
+  const totalJobs = sc ? (sc.JOB_CLAIMED + sc.JOB_ARRIVED + sc.JOB_COMPLETED + sc.JOB_RESCHEDULED + sc.PART_ORDER_SUBMITTED) : undefined;
+  const unclaimed = totalJobs && sc ? totalJobs - sc.JOB_CLAIMED : undefined;
 
+  // ── KPI Cards (7 columns) ──
   const kpiCards: (KpiConfig & { value: number | string })[] = [
     {
       key: 'completed',
       label: 'COMPLETED',
-      sub: 'this month',
-      bg: 'bg-gradient-to-br from-emerald-900/90 to-emerald-800/80',
-      icon: cardIcon('M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'),
-      value: completedOverall?.toLocaleString() ?? sc?.JOB_COMPLETED?.toLocaleString() ?? '—',
+      sub: 'this period',
+      iconPath: 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
+      kc: '#67bd6d',
+      kcRgb: '103,189,109',
+      delta: '+15%',
+      deltaUp: true,
+      value: fmt(completedOverall ?? sc?.JOB_COMPLETED),
     },
     {
       key: 'claimed',
       label: 'CLAIMED',
-      sub: 'this month',
-      bg: 'bg-gradient-to-br from-teal-900/90 to-teal-800/80',
-      icon: cardIcon('M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'),
-      value: sc?.JOB_CLAIMED?.toLocaleString() ?? '—',
+      sub: 'this period',
+      iconPath: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+      kc: '#5484d1',
+      kcRgb: '84,132,209',
+      delta: '+12%',
+      deltaUp: true,
+      value: fmt(sc?.JOB_CLAIMED),
     },
     {
       key: 'arrived',
-      label: 'ARRIVED ON-SITE',
-      sub: 'this month',
-      bg: 'bg-gradient-to-br from-amber-900/80 to-yellow-900/70',
-      icon: cardIcon('M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z'),
-      value: sc?.JOB_ARRIVED?.toLocaleString() ?? '—',
+      label: 'ARRIVED',
+      sub: 'on-site now',
+      iconPath: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10',
+      kc: '#d57033',
+      kcRgb: '213,112,51',
+      delta: '+8%',
+      deltaUp: true,
+      value: fmt(sc?.JOB_ARRIVED),
     },
     {
       key: 'rescheduled',
       label: 'RESCHEDULED',
-      sub: 'this month',
-      bg: 'bg-gradient-to-br from-purple-900/90 to-purple-800/80',
-      icon: cardIcon('M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'),
-      value: sc?.JOB_RESCHEDULED?.toLocaleString() ?? '—',
+      sub: 'this period',
+      iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+      kc: '#d95459',
+      kcRgb: '217,84,89',
+      delta: '+8%',
+      deltaUp: false,
+      value: fmt(sc?.JOB_RESCHEDULED),
     },
     {
       key: 'partOrders',
       label: 'PART ORDERS',
-      sub: 'this month',
-      bg: 'bg-gradient-to-br from-slate-800/90 to-slate-700/80',
-      icon: cardIcon('M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'),
-      value: sc?.PART_ORDER_SUBMITTED?.toLocaleString() ?? '—',
+      sub: 'this period',
+      iconPath: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z',
+      kc: '#8b61ae',
+      kcRgb: '139,97,174',
+      delta: '-1',
+      deltaUp: false,
+      value: fmt(sc?.PART_ORDER_SUBMITTED),
     },
     {
       key: 'vendors',
       label: 'ACTIVE VENDORS',
       sub: 'total registered',
-      bg: 'bg-gradient-to-br from-blue-900/90 to-cyan-900/80',
-      icon: cardIcon('M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'),
-      value: vendorCount?.toLocaleString() ?? '—',
+      useDateRange: false,
+      iconPath: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 7a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75',
+      kc: '#33bde0',
+      kcRgb: '51,189,224',
+      value: fmt(vendorCount),
     },
   ];
 
   // ── Chart data ──
-  const chartData = useMemo(() => {
+  const rawChartData = useMemo(() => {
     const raw = trendQ.data?.data?.data;
     if (!raw) return [];
     const periodsSet = new Set<string>();
     Object.values(raw).forEach((pts) => pts.forEach((p) => periodsSet.add(p.period)));
     return Array.from(periodsSet).sort().map((period) => {
       const row: Record<string, string | number> = { period };
-      LINE_CONFIG.forEach(({ key }) => {
-        if (key === 'UNCLAIMED') return;
+      LINE_SERIES.forEach(({ key }) => {
         const pt = raw[key]?.find((p: TimeSeriesPoint) => p.period === period);
         row[key] = pt?.count ?? 0;
       });
@@ -176,391 +254,638 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
     });
   }, [trendQ.data]);
 
-  const groupBy = trendQ.data?.data?.groupBy;
+  // Filter data by custom/page date range, then aggregate into weekly/monthly buckets
+  const chartData = useMemo(() => {
+    if (!rawChartData.length) return [];
+
+    // Apply date range filter for custom and page ranges
+    let filtered = rawChartData;
+    if (trendRange === 'custom' && trendFrom && trendTo) {
+      const from = new Date(trendFrom + 'T00:00:00').getTime();
+      const to = new Date(trendTo + 'T00:00:00').getTime();
+      filtered = rawChartData.filter((d) => {
+        const dt = new Date(String(d.period) + 'T00:00:00').getTime();
+        return !isNaN(dt) && dt >= from && dt <= to;
+      });
+    } else if (trendRange === 'page') {
+      const from = new Date(startDate + 'T00:00:00').getTime();
+      const to = new Date(endDate + 'T00:00:00').getTime();
+      filtered = rawChartData.filter((d) => {
+        const dt = new Date(String(d.period) + 'T00:00:00').getTime();
+        return !isNaN(dt) && dt >= from && dt <= to;
+      });
+    } else if (trendRange === '7d') {
+      filtered = rawChartData.slice(-7);
+    }
+
+    if (!filtered.length) return [];
+    if (trendGroupBy === 'day') return filtered;
+
+    const keys = LINE_SERIES.map((s) => s.key);
+
+    // Detect if data is already monthly (period like "2026-05" with no day part)
+    const firstPeriod = String(filtered[0]?.period ?? '');
+    const isAlreadyMonthly = /^\d{4}-\d{2}$/.test(firstPeriod);
+
+    if (trendGroupBy === 'week') {
+      if (isAlreadyMonthly) return filtered; // can't split monthly into weeks
+      const out: Record<string, string | number>[] = [];
+      for (let i = 0; i < filtered.length; i += 7) {
+        const chunk = filtered.slice(i, i + 7);
+        if (!chunk.length) break;
+        const dt = new Date(String(chunk[0].period) + 'T00:00:00');
+        const label = `wk ${dt.getMonth() + 1}/${dt.getDate()}`;
+        const row: Record<string, string | number> = { period: label };
+        keys.forEach((k) => {
+          row[k] = chunk.reduce((sum, d) => sum + (Number(d[k]) || 0), 0);
+        });
+        out.push(row);
+      }
+      return out;
+    }
+
+    if (trendGroupBy === 'month') {
+      if (isAlreadyMonthly) return filtered; // already monthly
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const groups: Record<string, Record<string, string | number>> = {};
+      const orderedKeys: string[] = [];
+      filtered.forEach((d) => {
+        const dt = new Date(String(d.period) + 'T00:00:00');
+        const key = `${monthNames[dt.getMonth()]} ${dt.getFullYear()}`;
+        if (!groups[key]) {
+          groups[key] = { period: key };
+          keys.forEach((k) => { groups[key][k] = 0; });
+          orderedKeys.push(key);
+        }
+        keys.forEach((k) => {
+          (groups[key][k] as number) += Number(d[k]) || 0;
+        });
+      });
+      return orderedKeys.map((k) => groups[k]);
+    }
+
+    return filtered;
+  }, [rawChartData, trendGroupBy, trendRange, trendFrom, trendTo, startDate, endDate]);
+
   const formatLabel = (v: string) => {
-    if (groupBy === 'day') {
-      const d = new Date(v + 'T00:00:00');
-      return `${d.getMonth() + 1}/${d.getDate()}`;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // Weekly buckets created client-side are already formatted (e.g. "wk 3/30")
+    if (trendGroupBy === 'week') return String(v);
+    // Monthly: format "2025-07" → "Jul" or client-side "Mar 2026" → "Mar"
+    if (trendGroupBy === 'month') {
+      const ym = v.match(/^(\d{4})-(\d{2})$/);
+      if (ym) return months[Number(ym[2]) - 1];
+      const named = v.match(/^([A-Za-z]+)/);
+      if (named) return named[1];
+      return String(v);
     }
-    if (groupBy === 'month') {
-      const [y, m] = v.split('-');
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${months[Number(m) - 1]} ${y.slice(2)}`;
-    }
+    // Daily: format "2026-05-12" → "5/12"
+    const d = new Date(v + 'T00:00:00');
+    if (!isNaN(d.getTime())) return `${d.getMonth() + 1}/${d.getDate()}`;
     return v;
   };
 
-  // ── Recommended actions ──
-  const actions = useMemo(() => {
-    const items: { icon: string; color: string; text: string; detail: string; btn: string }[] = [];
-    const completed = sc?.JOB_COMPLETED ?? 0;
-    const rescheduled = sc?.JOB_RESCHEDULED ?? 0;
-    const partOrders = sc?.PART_ORDER_SUBMITTED ?? 0;
-    const total = (sc?.JOB_CLAIMED ?? 0) + (sc?.JOB_ARRIVED ?? 0) + completed + rescheduled + partOrders;
-    const lowVendors = 0;
-    items.push({
-      icon: 'warn',
-      color: 'bg-amber-500/20 text-amber-400',
-      text: `${lowVendors} vendors below 20% completion`,
-      detail: '— review assignments and consider reassignment',
-      btn: 'Review →',
-    });
-    return items;
-  }, [sc]);
-
-  // ── Vendor tables ──
+  // ── Vendor tables (from new range API) ──
+  const vbdRows: VendorStatusRow[] = vbdQ.data?.data?.data ?? [];
+  const vbdTotals = vbdQ.data?.data?.totals;
   const completedByVendor: CompletedVendor[] = completedQ.data?.data?.byVendor ?? [];
-  const filteredByVendor = completedByVendor.filter((v) =>
-    v.vendorName.toLowerCase().includes(vendorSearch.toLowerCase()),
-  );
-  const vendors: Vendor[] = vendorsQ.data?.data?.data ?? [];
-  const pagination = vendorsQ.data?.data?.pagination;
 
+  const filteredByVendor = useMemo(() => {
+    let list = vbdRows.filter((v) =>
+      !vbdSearch || v.vendorName.toLowerCase().includes(vbdSearch.toLowerCase()) || String(v.vendorId).includes(vbdSearch),
+    );
+    // Sort by completed desc
+    list.sort((a, b) => b.statusCounts.JOB_COMPLETED - a.statusCounts.JOB_COMPLETED);
+    // Pin selected vendor to top
+    if (selectedVendor) {
+      const idx = list.findIndex((v) => v.vendorId === selectedVendor.id);
+      if (idx > 0) { const [sel] = list.splice(idx, 1); list = [sel, ...list]; }
+    }
+    return list;
+  }, [vbdRows, vbdSearch, selectedVendor]);
+
+  // Selected vendor stats for VBD summary
+  const selectedVendorData = selectedVendor ? vbdRows.find((v) => v.vendorId === selectedVendor.id) : null;
+  const svCounts = selectedVendorData?.statusCounts;
+  const vendors: Vendor[] = vendorsQ.data?.data?.data ?? [];
+  const allVendorsFiltered = vendors.filter((v) =>
+    !vendorSearch || v.name.toLowerCase().includes(vendorSearch.toLowerCase()) || v.username.toLowerCase().includes(vendorSearch.toLowerCase()),
+  );
+  const pagination = vendorsQ.data?.data?.pagination;
   const lastUpdated = new Date();
 
   return (
-    <div className="space-y-6">
-      {/* Title + Date Range */}
-      <div className="flex items-start justify-between">
+    <div>
+      {/* ── Page header ── */}
+      <div className="phead">
         <div>
-          <h1 className="text-[24px] font-bold text-[#e6edf8] leading-tight">Job Board Dashboard</h1>
-          <p className="text-[13px] text-[#8498b7]">
-            Live data from <span className="text-blue-400">pros.shs.com</span> — vendor counts, job statuses, completion metrics
-          </p>
+          <div className="phead-title">Job Board Dashboard</div>
+          <div className="phead-sub" style={{ color: 'var(--tx2)' }}>
+            Live data from <span style={{ color: 'var(--blue)' }}>pros.shs.com</span> — vendor counts, job statuses, completion metrics
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">From</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="rounded-lg border border-slate-600/50 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500 focus:outline-none"
-            />
-            <span className="text-xs text-slate-400">to</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="rounded-lg border border-slate-600/50 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500 focus:outline-none"
-            />
+          <div className="daterange">
+            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--tx2)', marginRight: '4px' }}>Page</span>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>From</span>
+            <input type="date" className="dr-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>To</span>
+            <input type="date" className="dr-input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span className="text-[11px] text-slate-400">
-              Updated {format(lastUpdated, 'MMM dd, yyyy')}
-            </span>
+          <div className="freshness">
+            <span className="freshness-dot" />
+            Updated {format(lastUpdated, 'MMM dd, yyyy')} · Snowflake
           </div>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-6 gap-3">
+      {/* ── KPI Strip (7 cards) ── */}
+      <div className="kstrip">
         {kpiCards.map((card) => (
-          <div key={card.key} className={`rounded-xl p-4 ${card.bg} relative overflow-hidden`}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold tracking-[0.4px] text-white uppercase">{card.label}</p>
-              <span className="text-white/40">{card.icon}</span>
+          <div
+            key={card.key}
+            className="kcard"
+            style={{ '--kc': card.kc, '--kc-rgb': card.kcRgb } as React.CSSProperties}
+          >
+            <div className="kcard-bg" />
+            <div className="kcard-block" />
+            <div className="kcard-body">
+              <div className="kcard-top">
+                <div className="kcard-label">
+                  {card.label}
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '4px', opacity: 0.5, verticalAlign: '-1px' }}>
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </div>
+                <span className="kcard-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={card.kc} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d={card.iconPath} />
+                  </svg>
+                </span>
+              </div>
+              <div className="kcard-val" style={{ marginTop: '8px' }}>{card.value}</div>
+              <div className="kcard-delta-row">
+                {card.delta && (
+                  <span className={`kpi-delta ${card.deltaUp ? '' : 'down'}`}>
+                    {card.deltaUp ? '↑' : '↓'} {card.delta}
+                  </span>
+                )}
+              </div>
+              <div className="kcard-sub">{card.useDateRange === false ? card.sub : dateRangeLabel}</div>
             </div>
-            <p className="font-bold text-white font-mono" style={{ fontSize: 'clamp(20px, 2vw, 32px)', letterSpacing: '-0.5px', lineHeight: 1 }}>{card.value}</p>
-            <p className="text-[11px] text-[#8498b7] mt-1">{card.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Recommended Actions */}
-      <div>
-        <p className="text-[11px] font-semibold tracking-[0.6px] text-[#82889e] uppercase mb-3">Recommended Actions</p>
-        <div className="space-y-2">
-          {actions.map((a, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-xl bg-[#131b30] border border-slate-700/40 px-5 py-3">
-              <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${a.color}`}>
-                {a.icon === 'warn' && (
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.13 0 1.85-1.22 1.28-2.18L13.28 3.18c-.56-.95-1.99-.95-2.56 0L3.79 16.82c-.57.96.14 2.18 1.28 2.18z" />
-                  </svg>
-                )}
-                {a.icon === 'parts' && (
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                )}
-                {a.icon === 'resched' && (
-                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9" />
-                  </svg>
-                )}
-              </span>
-              <div className="flex-1">
-                <span className="text-[13px] font-bold text-[#e6edf8]">{a.text}</span>
-                <span className="text-[13px] font-normal text-[#8498b7]">{a.detail}</span>
+      {/* ── Job Status Trend ── */}
+      <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ padding: '0 18px', paddingTop: '16px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>Job Status Trend</div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '1px' }}>
+                {selectedVendor?.name ?? 'All vendors'} · {trendGroupBy}
               </div>
-              <button
-                onClick={() => onNavigate?.('Operations')}
-                className="text-xs font-medium text-slate-400 hover:text-white border border-slate-600/50 rounded-lg px-3 py-1.5 transition hover:bg-slate-700/50"
-              >
-                {a.btn}
-              </button>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Job Status Trend */}
-      <div className="rounded-xl bg-[#131b30] border border-slate-700/40 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-[14px] font-semibold text-[#e6edf8]">Job Status Trend</h3>
-            <p className="text-[13px] text-[#82889e]">Job count &middot; {trendPeriod} view</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="viewtoggle">
+                <button className={`pbtn ${trendView === 'chart' ? 'on' : ''}`} onClick={() => setTrendView('chart')}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width="13" height="13" style={{ verticalAlign: '-2px', marginRight: '3px' }}><polyline points="3 17 9 11 13 15 21 6" /></svg>Trend
+                </button>
+                <button className={`pbtn ${trendView === 'table' ? 'on' : ''}`} onClick={() => setTrendView('table')}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width="13" height="13" style={{ verticalAlign: '-2px', marginRight: '3px' }}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></svg>Table
+                </button>
+              </div>
+              <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }}>↓ CSV</button>
+            </div>
           </div>
-          <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5">
-            <button className="px-2.5 py-1 text-[11px] text-slate-400 rounded">◆ Data</button>
-            {(['week', 'month', 'year'] as TrendPeriod[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setTrendPeriod(p)}
-                className={`px-3 py-1 text-[11px] font-medium rounded transition ${
-                  trendPeriod === p
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {p.charAt(0).toUpperCase() + p.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
 
-        {trendQ.isLoading ? (
-          <div className="h-80 animate-pulse rounded-xl bg-slate-800/40" />
-        ) : !chartData.length ? (
-          <div className="flex h-80 items-center justify-center text-slate-500">No trend data</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis
-                dataKey="period"
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                tickFormatter={formatLabel}
-                stroke="#334155"
-              />
-              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} stroke="#334155" label={{ value: 'Job count', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11, dx: -5 }} />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 12,
-                  border: '1px solid #334155',
-                  backgroundColor: '#1e293b',
-                  color: '#e2e8f0',
-                  fontSize: 12,
-                }}
-                labelFormatter={formatLabel}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} iconType="circle" />
-              {LINE_CONFIG.filter((c) => c.key !== 'UNCLAIMED').map(({ key, label, color }) => (
-                <Line
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  name={label}
-                  stroke={color}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+          {/* Filter bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '14px', paddingBottom: '14px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            {/* Vendor selector — searchable dropdown */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="tf-label">VENDOR</span>
+              <div ref={vendorDropdownRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setVendorDropdownOpen(!vendorDropdownOpen); setVendorDropdownSearch(''); }}
+                  style={{ background: 'var(--card-2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '5px 28px 5px 10px', fontSize: 'var(--fs-sm)', color: 'var(--tx1)', fontFamily: 'inherit', cursor: 'pointer', minWidth: '160px', textAlign: 'left', position: 'relative', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                >
+                  {selectedVendor?.name ?? 'All vendors'}
+                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}><path d="M1 1l4 4 4-4" stroke="#82889e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+                {vendorDropdownOpen && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', boxShadow: 'var(--sh-dropdown)', zIndex: 100, minWidth: '240px', maxHeight: '280px', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--app-bg)', borderRadius: 'var(--r-sm)', padding: '4px 8px', border: '1px solid var(--border)' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                        <input
+                          autoFocus
+                          placeholder="Search vendor..."
+                          value={vendorDropdownSearch}
+                          onChange={(e) => setVendorDropdownSearch(e.target.value)}
+                          style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ overflowY: 'auto', flex: 1 }}>
+                      <div
+                        style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 'var(--fs-sm)', color: 'var(--tx1)', fontWeight: !selectedVendor ? 600 : 400 }}
+                        onMouseDown={() => { setSelectedVendor(null); setVendorDropdownOpen(false); }}
+                      >
+                        All vendors
+                      </div>
+                      {vbdRows
+                        .filter((v) => !vendorDropdownSearch || v.vendorName.toLowerCase().includes(vendorDropdownSearch.toLowerCase()))
+                        .map((v) => (
+                          <div
+                            key={v.vendorId}
+                            style={{
+                              padding: '7px 12px',
+                              cursor: 'pointer',
+                              fontSize: 'var(--fs-sm)',
+                              color: 'var(--tx1)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              background: selectedVendor?.id === v.vendorId ? 'var(--blue-l-bg)' : 'transparent',
+                              fontWeight: selectedVendor?.id === v.vendorId ? 600 : 400,
+                            }}
+                            onMouseDown={() => { setSelectedVendor({ id: v.vendorId, name: v.vendorName }); setVendorDropdownOpen(false); }}
+                          >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px' }}>{v.vendorName}</span>
+                            <span className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', flexShrink: 0 }}>ID {v.vendorId}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
-      {/* Bottom tables */}
-      <div className="grid grid-cols-2 gap-5">
-        {/* Completed by Vendor */}
-        <div className="rounded-xl bg-[#131b30] border border-slate-700/40 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/30">
-            <div>
-              <h3 className="text-[14px] font-semibold text-[#e6edf8]">Completed by Vendor</h3>
-              {completedOverall !== undefined && (
-                <p className="text-[13px] text-[#82889e]">
-                  Total: <span className="text-emerald-400 font-semibold font-mono">{completedOverall.toLocaleString()}</span>
-                </p>
+            {/* Range */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="tf-label">RANGE</span>
+              <div className="ptoggle">
+                {(['page', '7d', '30d', '12m', 'custom'] as TrendRange[]).map((r) => (
+                  <button key={r} className={`pbtn ${trendRange === r ? 'on' : ''}`} onClick={() => handleRangeChange(r)}>
+                    {r === 'page' ? 'Page' : r === '7d' ? '7D' : r === '30d' ? '30D' : r === '12m' ? '12M' : 'Custom'}
+                  </button>
+                ))}
+              </div>
+              {trendRange === 'custom' && (
+                <div className="daterange" style={{ marginLeft: '4px' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <input type="date" className="dr-input" value={trendFrom} onChange={(e) => setTrendFrom(e.target.value)} />
+                  <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>–</span>
+                  <input type="date" className="dr-input" value={trendTo} onChange={(e) => setTrendTo(e.target.value)} />
+                </div>
               )}
             </div>
-            <input
-              type="text"
-              placeholder="Search vendor..."
-              value={vendorSearch}
-              onChange={(e) => setVendorSearch(e.target.value)}
-              className="w-40 rounded-lg border border-slate-600/50 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-          <div className="max-h-[380px] overflow-y-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-800/80 text-[11px] uppercase text-[#82889e] tracking-[0.4px] font-semibold">
-                <tr>
-                  <th className="px-5 py-2">#</th>
-                  <th className="px-5 py-2">Vendor</th>
-                  <th className="px-5 py-2 text-right">Done</th>
-                  <th className="px-5 py-2 text-right">Share</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/30">
-                {completedQ.isLoading ? (
-                  <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">Loading...</td></tr>
-                ) : filteredByVendor.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">No vendors found</td></tr>
-                ) : (
-                  filteredByVendor.map((v, i) => (
-                    <tr
-                      key={v.vendorId}
-                      className="cursor-pointer hover:bg-slate-800/40 transition"
-                      onClick={() => setSelectedVendor({ id: v.vendorId, name: v.vendorName })}
+
+            {/* Group By */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="tf-label">GROUP BY</span>
+              <div className="ptoggle">
+                {(['day', 'week', 'month'] as TrendGroupBy[]).map((g) => {
+                  const enabled = validGrains.includes(g);
+                  return (
+                    <button
+                      key={g}
+                      className={`pbtn ${trendGroupBy === g ? 'on' : ''} ${!enabled ? 'is-disabled' : ''}`}
+                      disabled={!enabled}
+                      title={!enabled ? `Not available for ${trendRange === 'page' ? 'Page' : trendRange === '7d' ? '7D' : trendRange === '30d' ? '30D' : trendRange === '12m' ? '12M' : 'Custom'}` : ''}
+                      onClick={() => enabled && setTrendGroupBy(g)}
                     >
-                      <td className="px-5 py-2.5 text-[13px] text-[#82889e] font-mono">{i + 1}</td>
-                      <td className="px-5 py-2.5">
-                        <span className="text-[13px] text-[#e6edf8] font-semibold">{v.vendorName}</span>
-                        <span className="block text-[11px] text-[#82889e] font-mono">ID: {v.vendorId}</span>
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-[13px] text-emerald-400 font-semibold font-mono">
-                        {v.completedCount.toLocaleString()}
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-[13px] text-[#8498b7] font-mono">
-                        {completedOverall ? `${((v.completedCount / completedOverall) * 100).toFixed(1)}%` : '—'}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      {g.charAt(0).toUpperCase() + g.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Reset */}
+            <button style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>Reset</button>
+          </div>
+
+          {/* Scope indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 0 2px', fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--blue)', flexShrink: 0 }} />
+            Matching page date · {fmtDate(startDate)} – {fmtDate(endDate)}
           </div>
         </div>
 
-        {/* All Vendors */}
-        <div className="rounded-xl bg-[#131b30] border border-slate-700/40 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/30">
-            <div>
-              <h3 className="text-[14px] font-semibold text-[#e6edf8]">All Vendors</h3>
-              {pagination && (
-                <p className="text-[13px] text-[#82889e]">
-                  Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-28 rounded-lg border border-slate-600/50 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              />
-              <button className="flex items-center gap-1 text-xs text-slate-400 border border-slate-600/50 rounded-lg px-2.5 py-1.5 hover:bg-slate-700/50 transition">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
-                </svg>
-                CSV
-              </button>
-            </div>
-          </div>
-          <div className="max-h-[380px] overflow-y-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-800/80 text-[11px] uppercase text-[#82889e] tracking-[0.4px] font-semibold">
-                <tr>
-                  <th className="px-4 py-2">ID</th>
-                  <th className="px-4 py-2">Name</th>
-                  <th className="px-4 py-2">Username</th>
-                  <th className="px-4 py-2">Phone</th>
-                  <th className="px-4 py-2">Last Login</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/30">
-                {vendorsQ.isLoading ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
-                ) : vendors.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">No vendors found</td></tr>
-                ) : (
-                  vendors.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-800/40 transition">
-                      <td className="px-4 py-2.5 text-[13px] text-[#82889e] font-mono">{v.id}</td>
-                      <td className="px-4 py-2.5 text-[13px] text-[#e6edf8] font-semibold">{v.name}</td>
-                      <td className="px-4 py-2.5 text-[13px] text-[#8498b7]">{v.username}</td>
-                      <td className="px-4 py-2.5 text-[13px] text-[#8498b7] font-mono">{v.phone}</td>
-                      <td className="px-4 py-2.5 text-[13px] text-[#82889e] font-mono">
-                        {v.lastLoginAt
-                          ? format(new Date(v.lastLoginAt), 'MMM d, yyyy h:mm a')
-                          : 'Never'}
-                      </td>
+        {/* Chart / Table */}
+        <div style={{ padding: '0 18px 16px' }}>
+          {trendQ.isLoading ? (
+            <div className="h-56 animate-pulse rounded-lg" style={{ background: 'var(--app-bg)' }} />
+          ) : !chartData.length ? (
+            <div className="flex h-56 items-center justify-center" style={{ color: 'var(--tx3)' }}>No trend data</div>
+          ) : trendView === 'chart' ? (
+            <>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData} margin={{ top: 14, right: 16, left: 0, bottom: 5 }}>
+                  <XAxis dataKey="period" tick={{ fontSize: 10, fill: 'var(--chart-axis)' }} tickFormatter={formatLabel} stroke="transparent" interval={chartData.length > 14 ? Math.floor(chartData.length / 12) : 0} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--chart-axis)' }} stroke="transparent" />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      backgroundColor: 'var(--card)',
+                      color: 'var(--tx1)',
+                      fontSize: 12,
+                      boxShadow: 'var(--sh-dropdown)',
+                    }}
+                    labelFormatter={formatLabel}
+                  />
+                  {LINE_SERIES.map(({ key, label, color }) => (
+                    <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="clegend">
+                {LINE_SERIES.map(({ label, color }) => (
+                  <span key={label} className="cl-item">
+                    <span className="cl-dot" style={{ background: color }} />{label}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            /* Table view */
+            <div className="card-scroll-wrap" style={{ maxHeight: '360px', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    {LINE_SERIES.map((s) => (
+                      <th key={s.key} style={{ textAlign: 'right' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />{s.label}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {chartData.map((d) => (
+                    <tr key={d.period as string}>
+                      <td className="font-mono" style={{ fontWeight: 600 }}>{formatLabel(d.period as string)}</td>
+                      {LINE_SERIES.map((s) => (
+                        <td key={s.key} className="font-mono" style={{ textAlign: 'right', color: s.color, fontWeight: 600 }}>
+                          {(d[s.key] as number).toLocaleString()}
+                        </td>
+                      ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-700/30 px-5 py-3">
-              <button
-                disabled={pagination.page <= 1}
-                onClick={() => setVendorPage(pagination.page - 1)}
-                className="rounded-lg border border-slate-600/50 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-700/50 disabled:opacity-40 transition"
-              >
-                Previous
-              </button>
-              <span className="text-xs text-slate-500">Page {pagination.page} / {pagination.totalPages}</span>
-              <button
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => setVendorPage(pagination.page + 1)}
-                className="rounded-lg border border-slate-600/50 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-700/50 disabled:opacity-40 transition"
-              >
-                Next
-              </button>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       </div>
 
-      {/* Vendor Detail Modal */}
-      {selectedVendor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSelectedVendor(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-[#131b30] border border-slate-700/50 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-white">{selectedVendor.name ?? `Vendor #${selectedVendor.id}`}</h3>
-                <p className="text-xs text-slate-500">ID: {selectedVendor.id}</p>
-              </div>
-              <button onClick={() => setSelectedVendor(null)} className="p-1 text-slate-400 hover:text-white transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {/* ── Vendor Job Breakdown ── */}
+      <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>Vendor Job Breakdown</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>
+              {selectedVendor?.name ? `Highlighting ${selectedVendor.name} · ` : ''}{fmtDate(startDate)} – {fmtDate(endDate)}
             </div>
-            {vendorDetailQ.isLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-8 animate-pulse rounded bg-slate-800/60" />
-                ))}
-              </div>
-            ) : vendorDetailQ.data?.data ? (
-              <div className="space-y-2">
-                {Object.entries(vendorDetailQ.data.data.statusCounts).map(([key, count]) => {
-                  const labels: Record<string, string> = {
-                    JOB_CLAIMED: 'Claimed', JOB_STARTED: 'Started', JOB_ARRIVED: 'Arrived',
-                    JOB_COMPLETED: 'Completed', JOB_RESCHEDULED: 'Rescheduled', PART_ORDER_SUBMITTED: 'Part Orders',
-                  };
-                  if (!labels[key]) return null;
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="card-search">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tx3)' }}>
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                placeholder="Search vendor…"
+                value={vbdSearch}
+                onChange={(e) => { setVbdSearch(e.target.value); setVbdPage(1); }}
+                style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
+              />
+            </div>
+            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }}>↓ CSV</button>
+          </div>
+        </div>
+
+        {/* Summary bar */}
+        {filteredByVendor.length > 0 && (
+          <div className="vbd-summary">
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">Vendors</div>
+              <div className="vbd-stat-v">{selectedVendor ? 1 : fmt(vbdTotals?.totalVendors)}</div>
+            </div>
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">Claimed</div>
+              <div className="vbd-stat-v" style={{ color: '#5484d1' }}>{fmt(svCounts ? svCounts.JOB_CLAIMED : vbdTotals?.JOB_CLAIMED)}</div>
+            </div>
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">Completed</div>
+              <div className="vbd-stat-v" style={{ color: 'var(--green)' }}>{fmt(svCounts ? svCounts.JOB_COMPLETED : vbdTotals?.JOB_COMPLETED)}</div>
+            </div>
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">Rescheduled</div>
+              <div className="vbd-stat-v" style={{ color: '#D95459' }}>{fmt(svCounts ? svCounts.JOB_RESCHEDULED : vbdTotals?.JOB_RESCHEDULED)}</div>
+            </div>
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">Part Orders</div>
+              <div className="vbd-stat-v" style={{ color: '#8b61ae' }}>{fmt(svCounts ? svCounts.PART_ORDER_SUBMITTED : vbdTotals?.PART_ORDER_SUBMITTED)}</div>
+            </div>
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">First Time Fix</div>
+              <div className="vbd-stat-v">{fmt(svCounts ? svCounts.FIRST_TIME_FIX : vbdTotals?.FIRST_TIME_FIX)}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="card-scroll-wrap" style={{ maxHeight: '420px' }}>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th style={{ width: '28px' }}>#</th>
+                <th>Vendor</th>
+                <th style={{ textAlign: 'right', width: '90px' }}>Claimed</th>
+                <th style={{ textAlign: 'right', width: '100px' }}>Completed</th>
+                <th style={{ textAlign: 'right', width: '108px' }}>Rescheduled</th>
+                <th style={{ textAlign: 'right', width: '108px' }}>Part Orders</th>
+                <th style={{ textAlign: 'right', width: '112px' }}>First Time Fix</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vbdQ.isLoading ? (
+                <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+              ) : filteredByVendor.length === 0 ? (
+                <tr><td colSpan={7} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
+                      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <p style={{ fontSize: 'var(--fs-md)', color: 'var(--tx2)', fontWeight: 500, marginBottom: '4px' }}>No results found</p>
+                    <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search or widen the date window</p>
+                  </td></tr>
+              ) : (
+                filteredByVendor.slice((vbdPage - 1) * 20, vbdPage * 20).map((v, i) => {
+                  const s = v.statusCounts;
+                  const isHighlighted = selectedVendor?.id === v.vendorId;
+                  const selTdStyle = isHighlighted ? { background: 'var(--blue-l-bg)', boxShadow: 'inset 3px 0 0 var(--blue)' } : {};
+                  const rank = (vbdPage - 1) * 20 + i + 1;
                   return (
-                    <div key={key} className="flex items-center justify-between rounded-lg bg-slate-800/50 px-4 py-2.5">
-                      <span className="text-sm text-slate-300">{labels[key]}</span>
-                      <span className="text-sm font-bold text-white">{(count as number).toLocaleString()}</span>
-                    </div>
+                    <tr
+                      key={v.vendorId}
+                      onClick={() => setSelectedVendor({ id: v.vendorId, name: v.vendorName })}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td className="font-mono" style={{ ...selTdStyle, color: isHighlighted ? 'var(--blue)' : 'var(--tx3)', fontSize: 'var(--fs-xs)', fontWeight: isHighlighted ? 700 : undefined }}>{isHighlighted ? '▸' : rank}</td>
+                      <td style={selTdStyle}>
+                        <div style={{ fontSize: 'var(--fs-base)', fontWeight: isHighlighted ? 600 : 500, color: isHighlighted ? 'var(--blue)' : 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>
+                        <div className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>ID: {v.vendorId}</div>
+                      </td>
+                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{s.JOB_CLAIMED.toLocaleString()}</td>
+                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{s.JOB_COMPLETED.toLocaleString()}</td>
+                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{s.JOB_RESCHEDULED.toLocaleString()}</td>
+                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#8b61ae', fontWeight: 600 }}>{s.PART_ORDER_SUBMITTED.toLocaleString()}</td>
+                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{s.FIRST_TIME_FIX.toLocaleString()}</td>
+                    </tr>
                   );
-                })}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {filteredByVendor.length > 0 && (() => {
+          const totalPages = Math.ceil(filteredByVendor.length / 20);
+          const from = (vbdPage - 1) * 20 + 1;
+          const to = Math.min(vbdPage * 20, filteredByVendor.length);
+          const pages: number[] = [];
+          [1, 2, vbdPage - 1, vbdPage, vbdPage + 1, totalPages - 1, totalPages].forEach((n) => {
+            if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n);
+          });
+          pages.sort((a, b) => a - b);
+          return (
+            <div className="pgbar">
+              <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>
+                Showing <strong style={{ color: 'var(--tx1)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--tx1)' }}>{filteredByVendor.length}</strong> vendors
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button className="pgbtn" disabled={vbdPage <= 1} onClick={() => setVbdPage(vbdPage - 1)}>‹ Prev</button>
+                {pages.map((n, idx) => (
+                  <span key={n}>
+                    {idx > 0 && n - pages[idx - 1] > 1 && <span style={{ color: 'var(--tx3)', padding: '0 2px' }}>…</span>}
+                    <button className={`pgbtn ${n === vbdPage ? 'on' : ''}`} onClick={() => setVbdPage(n)}>{n}</button>
+                  </span>
+                ))}
+                <button className="pgbtn" disabled={vbdPage >= totalPages} onClick={() => setVbdPage(vbdPage + 1)}>Next ›</button>
               </div>
-            ) : (
-              <p className="text-sm text-slate-500">No data available</p>
-            )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── Vendors section label ── */}
+      <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 'var(--ls-wider)', color: 'var(--tx3)', marginBottom: '8px' }}>Vendors</div>
+
+      {/* ── All Vendors ── */}
+      <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' }}>
+          <div>
+            <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>All Vendors</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>{pagination ? `${pagination.total.toLocaleString()} total` : '—'}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="card-search">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tx3)' }}>
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                placeholder="Search…"
+                value={vendorSearch}
+                onChange={(e) => setVendorSearch(e.target.value)}
+                style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
+              />
+            </div>
+            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }}>↓ CSV</button>
+          </div>
+        </div>
+        <div className="card-scroll-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th style={{ width: '36px' }}>ID</th>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Last Login</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vendorsQ.isLoading ? (
+                <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+              ) : allVendorsFiltered.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
+                      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <p style={{ fontSize: 'var(--fs-md)', color: 'var(--tx2)', fontWeight: 500, marginBottom: '4px' }}>No results found</p>
+                    <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search</p>
+                  </td></tr>
+              ) : (
+                allVendorsFiltered.map((v) => (
+                  <tr key={v.id} onClick={() => setSelectedVendor({ id: v.id, name: v.name })}>
+                    <td className="font-mono" style={{ color: 'var(--tx3)' }}>{v.id}</td>
+                    <td style={{ fontSize: 'var(--fs-base)', fontWeight: 500, color: 'var(--tx1)' }}>{v.name.length > 28 ? v.name.slice(0, 28) + '…' : v.name}</td>
+                    <td className="font-mono" style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx2)' }}>{v.username}</td>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: v.lastLoginAt ? 'var(--tx1)' : 'var(--tx3)' }}>
+                      {v.lastLoginAt ? format(new Date(v.lastLoginAt), 'MMM d, yyyy') : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {pagination && pagination.totalPages > 1 && (
+          <div className="pgbar">
+            <span style={{ color: 'var(--tx3)' }}>
+              Showing <strong style={{ color: 'var(--tx1)' }}>1–{vendors.length}</strong> of <strong style={{ color: 'var(--tx1)' }}>{pagination.total.toLocaleString()}</strong> vendors
+            </span>
+            <div style={{ flex: 1 }} />
+            <button className="pgbtn" disabled={pagination.page <= 1} onClick={() => setVendorPage(pagination.page - 1)}>‹ Prev</button>
+            <button className="pgbtn on">{pagination.page}</button>
+            {pagination.page + 1 <= pagination.totalPages && <button className="pgbtn" onClick={() => setVendorPage(pagination.page + 1)}>{pagination.page + 1}</button>}
+            {pagination.page + 2 <= pagination.totalPages && <button className="pgbtn" onClick={() => setVendorPage(pagination.page + 2)}>{pagination.page + 2}</button>}
+            {pagination.totalPages > pagination.page + 2 && <span style={{ padding: '0 6px', color: 'var(--tx3)' }}>…</span>}
+            {pagination.totalPages > pagination.page + 2 && <button className="pgbtn" onClick={() => setVendorPage(pagination.totalPages)}>{pagination.totalPages}</button>}
+            <button className="pgbtn" disabled={pagination.page >= pagination.totalPages} onClick={() => setVendorPage(pagination.page + 1)}>Next ›</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Critical Alert ── */}
+      {sc && (
+        <div className="alert-banner red">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div>
+            <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600, color: 'var(--tx1)' }}>
+              {fmt(unclaimed)} jobs unclaimed · {fmt(sc.PART_ORDER_SUBMITTED)} blocked on parts
+            </div>
+            <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', marginTop: '2px' }}>
+              Review vendor assignments and part order pipeline
+            </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

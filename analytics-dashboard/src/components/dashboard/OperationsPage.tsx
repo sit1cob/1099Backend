@@ -95,10 +95,16 @@ function DirectoryView({
     : 0;
   const currentlyArrived = sc?.JOB_ARRIVED ?? 0;
 
-  const handleCsvDownload = () => {
-    if (!vendors.length) return;
+  const handleCsvDownload = async () => {
+    const totalPages = pagination?.totalPages ?? 1;
+    let allVendors: Vendor[] = [];
+    for (let page = 1; page <= totalPages; page++) {
+      const res = await fetchVendors(page, 100);
+      allVendors = allVendors.concat(res.data.data);
+    }
+    if (!allVendors.length) return;
     const header = 'ID,Name,Username,Email,Phone,Last Login';
-    const rows = vendors.map((v) => {
+    const rows = allVendors.map((v) => {
       const ll = v.lastLoginAt ? format(new Date(v.lastLoginAt), 'yyyy-MM-dd HH:mm') : '';
       return [v.id, `"${v.name}"`, v.username, v.email ?? '', v.phone, ll].join(',');
     });
@@ -354,11 +360,11 @@ function VendorDetailView({ vendor, onBack }: { vendor: Vendor; onBack: () => vo
           {/* KPI Cards (FIX-027: 4-level hierarchy) */}
           <div className="grid grid-cols-6 gap-3">
             {[
-              { label: 'Completion Rate', value: `${completionRate}%`, context: `${completed} completed`, color: 'text-emerald-400', border: 'border-slate-700/40' },
+              { label: 'Completion Rate', value: `${completionRate} %`, context: `${completed} completed`, color: 'text-emerald-400', border: 'border-slate-700/40' },
               { label: 'Total Jobs', value: String(totalJobs), context: 'this period', color: 'text-blue-400', border: 'border-slate-700/40' },
-              { label: 'Avg Duration', value: summary?.avgDuration ?? '—', context: 'arrived → completed', color: 'text-teal-400', border: 'border-slate-700/40', suffix: 'min' },
+              { label: 'Avg Duration', value: summary?.avgDuration ?? '—', context: 'arrived → completed', color: 'text-teal-400', border: 'border-slate-700/40', suffix: ' min' },
               { label: 'Kairos Score', value: `★ ${summary?.kairosScore ?? '—'}`, context: 'out of 5.0', color: 'text-amber-400', border: 'border-slate-700/40' },
-              { label: 'Photo Compliance', value: `${summary?.photoCompliance ?? '—'}%`, context: 'Fleet avg: 53%', color: 'text-purple-400', border: 'border-slate-700/40' },
+              { label: 'Photo Compliance', value: `${summary?.photoCompliance ?? '—'} %`, context: 'Fleet avg: 53%', color: 'text-purple-400', border: 'border-slate-700/40' },
               { label: 'Parts Wait', value: String(partOrderCount), context: 'jobs blocked', color: 'text-red-400', border: 'border-red-500/30' },
             ].map((c) => (
               <div key={c.label} className={`rounded-xl bg-[#162236] border ${c.border} p-4 flex flex-col`}>
