@@ -1,0 +1,381 @@
+{
+  "info": {
+    "name": "Photo Upload Wrapper API Examples",
+    "description": "Example requests for the photo upload tokens wrapper API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://shs-1099-job-board.replit.app",
+      "type": "string"
+    },
+    {
+      "key": "assignmentId",
+      "value": "1102",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "photoToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const response = pm.response.json();",
+              "",
+              "if (response.success && response.data && response.data.accessToken) {",
+              "    pm.collectionVariables.set('token', response.data.accessToken);",
+              "    console.log('Token saved:', response.data.accessToken.substring(0, 20) + '...');",
+              "} else {",
+              "    console.error('Failed to get token from response');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"vendor@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"registered_user\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "login"]
+        },
+        "description": "Login to get JWT token. The token will be automatically saved to the collection variable."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get Photo Upload Tokens (Single File)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const response = pm.response.json();",
+              "",
+              "if (response.success && response.data && response.data.tokens && response.data.tokens.length > 0) {",
+              "    const token = response.data.tokens[0];",
+              "    pm.collectionVariables.set('photoToken', token.photoToken);",
+              "    pm.collectionVariables.set('uploadUrl', token.uploadUrl);",
+              "    pm.collectionVariables.set('uploadFields', JSON.stringify(token.uploadFields));",
+              "    console.log('Photo token saved:', token.photoToken);",
+              "    console.log('Upload URL:', token.uploadUrl);",
+              "} else {",
+              "    console.error('Failed to get photo token from response');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"files\": [\n    {\n      \"fileName\": \"part-photo.png\",\n      \"mimeType\": \"image/png\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/photo-upload-tokens",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "photo-upload-tokens"]
+        },
+        "description": "Get photo upload tokens for a single file. The response includes S3 upload URLs and signed fields."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get Photo Upload Tokens (Multiple Files)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const response = pm.response.json();",
+              "",
+              "if (response.success && response.data && response.data.tokens) {",
+              "    console.log('Received', response.data.tokens.length, 'photo tokens');",
+              "    response.data.tokens.forEach((token, index) => {",
+              "        console.log(`Token ${index + 1}:`, token.photoToken);",
+              "    });",
+              "    ",
+              "    // Save first token for testing",
+              "    if (response.data.tokens.length > 0) {",
+              "        pm.collectionVariables.set('photoToken', response.data.tokens[0].photoToken);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"files\": [\n    {\n      \"fileName\": \"part-photo-1.png\",\n      \"mimeType\": \"image/png\"\n    },\n    {\n      \"fileName\": \"part-photo-2.jpg\",\n      \"mimeType\": \"image/jpeg\"\n    },\n    {\n      \"fileName\": \"part-photo-3.heic\",\n      \"mimeType\": \"image/heic\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/photo-upload-tokens",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "photo-upload-tokens"]
+        },
+        "description": "Get photo upload tokens for multiple files at once."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Create Part with Photo Tokens",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"Samsung\",\n  \"applianceType\": \"Cooktop\",\n  \"partNumber\": \"12345\",\n  \"serialNumber\": \"SN-12345\",\n  \"quantity\": 1,\n  \"partType\": \"local\",\n  \"notes\": \"Test part with photo\",\n  \"photoTokens\": [\"{{photoToken}}\"]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/parts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "parts"]
+        },
+        "description": "Create a part and associate it with uploaded photos using photo tokens. Make sure to upload the photos to S3 first (step 5) before calling this."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Upload to S3 (Manual - See Instructions)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "multipart/form-data"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "Content-Type",
+              "value": "image/png",
+              "description": "From uploadFields",
+              "type": "text"
+            },
+            {
+              "key": "bucket",
+              "value": "parts-images-pr-us-east-2",
+              "description": "From uploadFields",
+              "type": "text"
+            },
+            {
+              "key": "X-Amz-Algorithm",
+              "value": "AWS4-HMAC-SHA256",
+              "description": "From uploadFields",
+              "type": "text"
+            },
+            {
+              "key": "X-Amz-Credential",
+              "value": "COPY_FROM_RESPONSE",
+              "description": "From uploadFields - MUST BE COPIED FROM STEP 2 RESPONSE",
+              "type": "text"
+            },
+            {
+              "key": "X-Amz-Date",
+              "value": "COPY_FROM_RESPONSE",
+              "description": "From uploadFields - MUST BE COPIED FROM STEP 2 RESPONSE",
+              "type": "text"
+            },
+            {
+              "key": "key",
+              "value": "COPY_FROM_RESPONSE",
+              "description": "From uploadFields - MUST BE COPIED FROM STEP 2 RESPONSE",
+              "type": "text"
+            },
+            {
+              "key": "Policy",
+              "value": "COPY_FROM_RESPONSE",
+              "description": "From uploadFields - MUST BE COPIED FROM STEP 2 RESPONSE",
+              "type": "text"
+            },
+            {
+              "key": "X-Amz-Signature",
+              "value": "COPY_FROM_RESPONSE",
+              "description": "From uploadFields - MUST BE COPIED FROM STEP 2 RESPONSE",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "description": "Select your image file",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "https://parts-images-pr-us-east-2.s3.us-east-2.amazonaws.com/",
+          "protocol": "https",
+          "host": ["parts-images-pr-us-east-2", "s3", "us-east-2", "amazonaws", "com"],
+          "path": [""]
+        },
+        "description": "Upload the actual file to S3 using the signed URL and fields from step 2.\n\nIMPORTANT: You must manually copy ALL uploadFields from the response of step 2 into this request's form-data fields. The signature is time-sensitive and unique to each request."
+      },
+      "response": []
+    },
+    {
+      "name": "Error Example: Missing Files Array",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/photo-upload-tokens",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "photo-upload-tokens"]
+        },
+        "description": "Example of error when files array is missing. Expected response: 400 Bad Request with helpful error message."
+      },
+      "response": []
+    },
+    {
+      "name": "Error Example: Empty Files Array",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"files\": []\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/photo-upload-tokens",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "photo-upload-tokens"]
+        },
+        "description": "Example of error when files array is empty. Expected response: 400 Bad Request."
+      },
+      "response": []
+    },
+    {
+      "name": "Error Example: Missing Authorization",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"files\": [\n    {\n      \"fileName\": \"test.png\",\n      \"mimeType\": \"image/png\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/photo-upload-tokens",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "photo-upload-tokens"]
+        },
+        "description": "Example of error when Authorization header is missing. Expected response: 401 Unauthorized."
+      },
+      "response": []
+    },
+    {
+      "name": "Error Example: Invalid File Object",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"files\": [\n    {\n      \"fileName\": \"test.png\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/assignments/{{assignmentId}}/photo-upload-tokens",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "assignments", "{{assignmentId}}", "photo-upload-tokens"]
+        },
+        "description": "Example of error when file object is missing required field (mimeType). Expected response: 400 Bad Request."
+      },
+      "response": []
+    }
+  ]
+}

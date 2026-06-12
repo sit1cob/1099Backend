@@ -1,13 +1,91 @@
 import { Router } from 'express';
 import { UserModel } from '../models/user';
 import { VendorModel } from '../models/vendor';
+import { PhotoTokenModel } from '../models/photoToken';
 import { password } from '../utils/password';
 import { jwtService } from '../services/jwt';
 import { authenticateJWT, type AuthenticatedRequest } from '../middleware/auth';
+import { ExternalApiAdapter, EXTERNAL_API_URL } from '../services/externalApiAdapter';
+import jwt from 'jsonwebtoken';
 
 export const authRouter = Router();
 
+// GET /api/auth/status - NO AUTH (proxies to external API)
+authRouter.get('/status', async (req, res) => {
+  try {
+    console.log('[AuthStatus] ========================================');
+    console.log('[AuthStatus] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/status`);
+    console.log('[AuthStatus] ========================================');
+
+    // Get the token from request headers
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Call external API
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/auth/status', token, 'GET');
+      
+      console.log('[AuthStatus] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AuthStatus] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AuthStatus] ================================================');
+      console.log('[AuthStatus] ✓ Returning external API response');
+
+      // Return external API response as-is
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AuthStatus] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(401).json({ 
+        success: false, 
+        message: extErr.message || 'Invalid or expired token' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AuthStatus] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to check auth status' });
+  }
+});
+
+// POST /api/auth/refresh - NO AUTH (proxies to external API)
+authRouter.post('/refresh', async (req, res) => {
+  try {
+    console.log('[AuthRefresh] ========================================');
+    console.log('[AuthRefresh] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/refresh`);
+    console.log('[AuthRefresh] ========================================');
+
+    try {
+      // Call external API (no token needed for refresh)
+      const externalResponse = await ExternalApiAdapter.callExternalApi('/api/auth/refresh', '', 'POST', req.body);
+      
+      console.log('[AuthRefresh] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AuthRefresh] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AuthRefresh] ================================================');
+      console.log('[AuthRefresh] ✓ Returning external API response');
+
+      // Return external API response as-is
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AuthRefresh] ✗ External API call failed:', extErr.message);
+      
+      // Return the error from external API
+      return res.status(401).json({ 
+        success: false, 
+        message: extErr.message || 'Token refresh failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AuthRefresh] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to refresh token' });
+  }
+});
+
 // POST /api/auth/login
+// First call external API, then call MongoDB, cache and compare responses
 authRouter.post('/login', async (req, res) => {
   try {
     const { username, password: pwd, role, fcmToken } = req.body || {};
@@ -18,80 +96,241 @@ authRouter.post('/login', async (req, res) => {
     }
     if (!username || !pwd) return res.status(400).json({ success: false, message: 'username and password required' });
 
-    const user = await UserModel.findOne({ username }).lean();
-    if (!user || !user.passwordHash) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] Starting dual API call for user:', username);
+    console.log('[LOGIN] ========================================');
 
-    const ok = await password.compare(pwd, user.passwordHash);
-    if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-
-    if (user.isActive === false) return res.status(403).json({ success: false, message: 'User disabled' });
-
-    const payload = {
-      userId: String(user._id),
-      role: (role as string) || user.role || 'registered_user',
-      vendorId: user.vendorId ? String(user.vendorId) : undefined,
-      sessionId: `s_${Date.now()}`,
-    };
-
-    const accessToken = jwtService.signAccess(payload, '2h');
-    const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
-
-    // Persist session metadata and FCM token (if provided)
-    const $set: Record<string, any> = { lastLoginAt: new Date() };
-    const $addToSet: Record<string, any> = {};
-    if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
-      $set.lastFcmToken = fcmToken.trim();
-      $set.lastFcmAt = new Date();
-      $addToSet.fcmTokens = fcmToken.trim();
+    // STEP 1: Call external API first
+    console.log('[LOGIN] STEP 1: Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/login`);
+    let externalResponse;
+    try {
+      externalResponse = await ExternalApiAdapter.login(username, pwd, role);
+      console.log('[LOGIN] ✓ External API call successful');
+    } catch (extErr: any) {
+      console.error('[LOGIN] ✗ External API call failed:', extErr.message);
+      // Continue to MongoDB even if external fails
     }
-    if (Object.keys($addToSet).length > 0) {
-      const result = await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
-      console.log('[LOGIN] fcmToken update result', { matched: (result as any).matchedCount, modified: (result as any).modifiedCount });
-    } else {
-      const result = await UserModel.updateOne({ _id: user._id }, { $set });
-      console.log('[LOGIN] profile update result', { matched: (result as any).matchedCount, modified: (result as any).modifiedCount });
+
+    // STEP 2: Call MongoDB/Local API
+    console.log('[LOGIN] STEP 2: Calling MONGODB/LOCAL API...');
+    let mongoResponse;
+    try {
+      const user = await UserModel.findOne({ username }).lean();
+      if (user && user.passwordHash) {
+        const ok = await password.compare(pwd, user.passwordHash);
+        if (ok && user.isActive !== false) {
+          const payload = {
+            userId: String(user._id),
+            role: (role as string) || user.role || 'registered_user',
+            vendorId: user.vendorId ? String(user.vendorId) : undefined,
+            sessionId: `s_${Date.now()}`,
+          };
+
+          const accessToken = jwtService.signAccess(payload, '2h');
+          const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
+
+          // Update FCM token if provided
+          const $set: Record<string, any> = { lastLoginAt: new Date() };
+          const $addToSet: Record<string, any> = {};
+          if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
+            $set.lastFcmToken = fcmToken.trim();
+            $set.lastFcmAt = new Date();
+            $addToSet.fcmTokens = fcmToken.trim();
+          }
+          if (Object.keys($addToSet).length > 0) {
+            await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+          } else {
+            await UserModel.updateOne({ _id: user._id }, { $set });
+          }
+
+          const freshUser = await UserModel.findById(user._id).lean();
+          let vendorName: string | undefined;
+          if (payload.vendorId) {
+            const vendor = await VendorModel.findById(payload.vendorId).lean();
+            vendorName = vendor?.name;
+          }
+
+          const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
+
+          mongoResponse = {
+            success: true,
+            data: {
+              accessToken,
+              refreshToken,
+              user: {
+                id: String(freshUser?._id || user._id),
+                username: freshUser?.username || user.username,
+                role: freshUser?.role || payload.role,
+                vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
+                vendorName,
+                email: freshUser?.email,
+                permissions,
+              },
+            },
+          };
+          console.log('[LOGIN] ✓ MongoDB/Local API call successful');
+        } else {
+          console.log('[LOGIN] ✗ MongoDB/Local API: Invalid credentials or user disabled');
+        }
+      } else {
+        console.log('[LOGIN] ✗ MongoDB/Local API: User not found');
+      }
+    } catch (mongoErr: any) {
+      console.error('[LOGIN] ✗ MongoDB/Local API call failed:', mongoErr.message);
     }
-    // Fetch back minimal fields to verify
-    const updated = await UserModel.findById(user._id).select('fcmTokens lastFcmToken lastFcmAt').lean();
-    console.log('[LOGIN] user fcm snapshot', {
-      tokensCount: (updated?.fcmTokens || []).length,
-      lastFcmToken: updated?.lastFcmToken ? String(updated.lastFcmToken).slice(0, 8) + '…' : null,
-      lastFcmAt: updated?.lastFcmAt || null,
-    });
 
-    // Fetch latest user doc after updates to return fresh data
-    const freshUser = await UserModel.findById(user._id).lean();
-    let vendorName: string | undefined;
-    if (payload.vendorId) {
-      const vendor = await VendorModel.findById(payload.vendorId).lean();
-      vendorName = vendor?.name;
+    // STEP 3: Compare and log both responses
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] COMPARISON:');
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] External API Response:', externalResponse ? 'SUCCESS' : 'FAILED');
+    console.log('[LOGIN] MongoDB API Response:', mongoResponse ? 'SUCCESS' : 'FAILED');
+    
+    if (externalResponse) {
+      console.log('[LOGIN] External Response:', JSON.stringify(externalResponse, null, 2));
     }
-    console.log('[LOGIN] fresh user', freshUser);
+    if (mongoResponse) {
+      console.log('[LOGIN] MongoDB Response:', JSON.stringify(mongoResponse, null, 2));
+    }
+    console.log('[LOGIN] ========================================');
 
-    const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
+    // STEP 4: Return external response (or MongoDB as fallback)
+    const finalResponse = externalResponse || mongoResponse;
+    
+    if (!finalResponse) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
 
-    return res.json({
-      success: true,
-      data: {
-        accessToken,
-        refreshToken,
-        user: {
-          id: String(freshUser?._id || user._id),
-          username: freshUser?.username || user.username,
-          role: freshUser?.role || payload.role,
-          vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
-          vendorName,
-          email: freshUser?.email,
-          lastFcmToken: freshUser?.lastFcmToken || updated?.lastFcmToken,
-          lastFcmAt: freshUser?.lastFcmAt || updated?.lastFcmAt,
-          fcmTokensCount: Array.isArray(freshUser?.fcmTokens) ? freshUser!.fcmTokens.length : (Array.isArray(updated?.fcmTokens) ? updated!.fcmTokens.length : 0),
-          permissions,
-        },
-      },
-    });
+    console.log('[LOGIN] Returning response from:', externalResponse ? 'EXTERNAL API' : 'MONGODB API');
+    return res.json(finalResponse);
   } catch (err: any) {
-    console.error('[LOGIN]', err);
+    console.error('[LOGIN] Unexpected error:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Login failed' });
+  }
+});
+
+// POST /api/auth/login-external
+// First call external API, then call MongoDB, cache and compare responses
+authRouter.post('/login-external', async (req, res) => {
+  try {
+    const { username, password: pwd, role, fcmToken } = req.body || {};
+    if (!username || !pwd) {
+      return res.status(400).json({ success: false, message: 'username and password required' });
+    }
+
+    console.log('[LOGIN-EXTERNAL] ========================================');
+    console.log('[LOGIN-EXTERNAL] Starting dual API call for user:', username);
+    console.log('[LOGIN-EXTERNAL] ========================================');
+
+    // STEP 1: Call external API first
+    console.log('[LOGIN-EXTERNAL] STEP 1: Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/login`);
+    let externalResponse;
+    try {
+      externalResponse = await ExternalApiAdapter.login(username, pwd, role);
+      console.log('[LOGIN-EXTERNAL] ✓ External API call successful');
+    } catch (extErr: any) {
+      console.error('[LOGIN-EXTERNAL] ✗ External API call failed:', extErr.message);
+      // Continue to MongoDB even if external fails
+    }
+
+    // STEP 2: Call MongoDB/Local API
+    console.log('[LOGIN-EXTERNAL] STEP 2: Calling MONGODB/LOCAL API...');
+    let mongoResponse;
+    try {
+      const user = await UserModel.findOne({ username }).lean();
+      if (user && user.passwordHash) {
+        const ok = await password.compare(pwd, user.passwordHash);
+        if (ok && user.isActive !== false) {
+          const payload = {
+            userId: String(user._id),
+            role: (role as string) || user.role || 'registered_user',
+            vendorId: user.vendorId ? String(user.vendorId) : undefined,
+            sessionId: `s_${Date.now()}`,
+          };
+
+          const accessToken = jwtService.signAccess(payload, '2h');
+          const refreshToken = jwtService.signRefresh({ userId: payload.userId, role: payload.role }, '7d');
+
+          // Update FCM token if provided
+          const $set: Record<string, any> = { lastLoginAt: new Date() };
+          const $addToSet: Record<string, any> = {};
+          if (typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
+            $set.lastFcmToken = fcmToken.trim();
+            $set.lastFcmAt = new Date();
+            $addToSet.fcmTokens = fcmToken.trim();
+          }
+          if (Object.keys($addToSet).length > 0) {
+            await UserModel.updateOne({ _id: user._id }, { $set, $addToSet });
+          } else {
+            await UserModel.updateOne({ _id: user._id }, { $set });
+          }
+
+          const freshUser = await UserModel.findById(user._id).lean();
+          let vendorName: string | undefined;
+          if (payload.vendorId) {
+            const vendor = await VendorModel.findById(payload.vendorId).lean();
+            vendorName = vendor?.name;
+          }
+
+          const permissions = ['view_assigned_jobs', 'update_job_status', 'upload_parts', 'view_vendor_portal'];
+
+          mongoResponse = {
+            success: true,
+            data: {
+              accessToken,
+              refreshToken,
+              user: {
+                id: String(freshUser?._id || user._id),
+                username: freshUser?.username || user.username,
+                role: freshUser?.role || payload.role,
+                vendorId: freshUser?.vendorId ? String(freshUser.vendorId) : payload.vendorId,
+                vendorName,
+                email: freshUser?.email,
+                permissions,
+              },
+            },
+          };
+          console.log('[LOGIN-EXTERNAL] ✓ MongoDB/Local API call successful');
+        } else {
+          console.log('[LOGIN-EXTERNAL] ✗ MongoDB/Local API: Invalid credentials or user disabled');
+        }
+      } else {
+        console.log('[LOGIN-EXTERNAL] ✗ MongoDB/Local API: User not found');
+      }
+    } catch (mongoErr: any) {
+      console.error('[LOGIN-EXTERNAL] ✗ MongoDB/Local API call failed:', mongoErr.message);
+    }
+
+    // STEP 3: Compare and log both responses
+    console.log('[LOGIN-EXTERNAL] ========================================');
+    console.log('[LOGIN-EXTERNAL] COMPARISON:');
+    console.log('[LOGIN-EXTERNAL] ========================================');
+    console.log('[LOGIN-EXTERNAL] External API Response:', externalResponse ? 'SUCCESS' : 'FAILED');
+    console.log('[LOGIN-EXTERNAL] MongoDB API Response:', mongoResponse ? 'SUCCESS' : 'FAILED');
+    
+    if (externalResponse) {
+      console.log('[LOGIN-EXTERNAL] External Response:', JSON.stringify(externalResponse, null, 2));
+    }
+    if (mongoResponse) {
+      console.log('[LOGIN-EXTERNAL] MongoDB Response:', JSON.stringify(mongoResponse, null, 2));
+    }
+    console.log('[LOGIN-EXTERNAL] ========================================');
+
+    // STEP 4: Return external response (or MongoDB as fallback)
+    const finalResponse = externalResponse || mongoResponse;
+    
+    if (!finalResponse) {
+      return res.status(401).json({ success: false, message: 'Both APIs failed' });
+    }
+
+    console.log('[LOGIN-EXTERNAL] Returning response from:', externalResponse ? 'EXTERNAL API' : 'MONGODB API');
+    return res.json(finalResponse);
+  } catch (err: any) {
+    console.error('[LOGIN-EXTERNAL] Unexpected error:', err.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: err?.message || 'Login failed' 
+    });
   }
 });
 
@@ -227,5 +466,345 @@ authRouter.post('/register-vendor', async (req, res) => {
   } catch (err: any) {
     console.error('[REGISTER_VENDOR]', err);
     return res.status(500).json({ success: false, message: err?.message || 'Registration failed' });
+  }
+});
+
+// PATCH /api/auth/vendor/assignments/:assignmentId - NO AUTH (proxies to external API v2)
+// This must be defined BEFORE the authenticateJWT() middleware
+authRouter.patch('/vendor/assignments/:assignmentId', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    console.log('[AuthVendorUpdateAssignment] ========================================');
+    console.log('[AuthVendorUpdateAssignment] Method: PATCH');
+    console.log('[AuthVendorUpdateAssignment] External URL:', `${EXTERNAL_API_URL}/api/v2/assignments/${assignmentId}`);
+    console.log('[AuthVendorUpdateAssignment] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[AuthVendorUpdateAssignment] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader || '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      console.log('[AuthVendorUpdateAssignment] Token (first 20 chars):', String(token).substring(0, 20) + '...');
+
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/v2/assignments/${assignmentId}`,
+        token,
+        'PATCH',
+        req.body
+      );
+
+      console.log('[AuthVendorUpdateAssignment] ========== EXTERNAL API RESPONSE ==========');
+      console.log('[AuthVendorUpdateAssignment] Response:', JSON.stringify(externalResponse, null, 2));
+      console.log('[AuthVendorUpdateAssignment] ================================================');
+      console.log('[AuthVendorUpdateAssignment] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AuthVendorUpdateAssignment] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({
+        success: false,
+        message: extErr.message || 'External API call failed'
+      });
+    }
+  } catch (err: any) {
+    console.error('[AuthVendorUpdateAssignment] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to update assignment' });
+  }
+});
+
+// GET /api/auth/vendor/assignments/:assignmentId/parts - NO AUTH (proxies to external API)
+authRouter.get('/vendor/assignments/:assignmentId/parts', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    
+    console.log('[GetAssignmentParts] ========================================');
+    console.log('[GetAssignmentParts] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/assignments/${assignmentId}/parts`);
+    console.log('[GetAssignmentParts] Assignment ID:', assignmentId);
+    console.log('[GetAssignmentParts] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/auth/vendor/assignments/${assignmentId}/parts`,
+        token,
+        'GET'
+      );
+
+      if (externalResponse?.success) {
+        if (Array.isArray(externalResponse?.data)) {
+          externalResponse.data = externalResponse.data.map((part: any) => {
+            if (part && part.partType === 'ordered') return { ...part, partType: 'order_part' };
+            return part;
+          });
+        } else if (externalResponse?.data && typeof externalResponse.data === 'object') {
+          if ((externalResponse.data as any).partType === 'ordered') {
+            externalResponse.data = { ...externalResponse.data, partType: 'order_part' };
+          }
+        }
+      }
+
+      console.log('[GetAssignmentParts] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[GetAssignmentParts] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[GetAssignmentParts] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to get assignment parts' });
+  }
+});
+
+// POST /api/auth/vendor/assignments/:assignmentId/parts - NO AUTH (proxies to external API)
+// Auto-retrieves photo tokens from database if not provided in request
+authRouter.post('/vendor/assignments/:assignmentId/parts', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    
+    console.log('[AddAssignmentPart] ========================================');
+    console.log('[AddAssignmentPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/assignments/${assignmentId}/parts`);
+    console.log('[AddAssignmentPart] Assignment ID:', assignmentId);
+    console.log('[AddAssignmentPart] Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[AddAssignmentPart] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      // Auto-retrieve photo tokens if not provided
+      let requestBody = { ...req.body };
+      
+      if (!requestBody.photoTokens || requestBody.photoTokens.length === 0) {
+        console.log('[AddAssignmentPart] No photoTokens provided, checking database...');
+        
+        try {
+          // Decode JWT to get user ID
+          const decoded = jwt.decode(token) as any;
+          const userId = decoded?.userId || decoded?.id;
+          
+          if (userId) {
+            // Find the most recent unconsumed photo token for this assignment and user
+            const latestToken = await PhotoTokenModel.findOne({
+              assignmentId: String(assignmentId),
+              userId: String(userId),
+              consumed: false,
+              expiresAt: { $gt: new Date() } // Not expired
+            }).sort({ createdAt: -1 }); // Most recent first
+            
+            if (latestToken) {
+              requestBody.photoTokens = [latestToken.token];
+              console.log('[AddAssignmentPart] ✓ Auto-retrieved latest photo token from database');
+              console.log('[AddAssignmentPart] Token:', latestToken.token);
+            } else {
+              console.log('[AddAssignmentPart] No unconsumed photo tokens found in database');
+            }
+          }
+        } catch (dbErr: any) {
+          console.error('[AddAssignmentPart] ⚠️ Failed to retrieve tokens from database:', dbErr.message);
+          // Continue without tokens
+        }
+      } else {
+        console.log('[AddAssignmentPart] Using provided photoTokens:', requestBody.photoTokens);
+      }
+
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/assignments/${assignmentId}/parts`,
+        token,
+        'POST',
+        requestBody
+      );
+
+      if (externalResponse?.success) {
+        if (Array.isArray(externalResponse?.data)) {
+          externalResponse.data = externalResponse.data.map((part: any) => {
+            if (part && part.partType === 'ordered') return { ...part, partType: 'order_part' };
+            return part;
+          });
+        } else if (externalResponse?.data && typeof externalResponse.data === 'object') {
+          if ((externalResponse.data as any).partType === 'ordered') {
+            externalResponse.data = { ...externalResponse.data, partType: 'order_part' };
+          }
+        }
+      }
+      
+      // Mark token as consumed if part creation was successful
+      if (externalResponse.success && requestBody.photoTokens && requestBody.photoTokens.length > 0) {
+        try {
+          await PhotoTokenModel.updateMany(
+            { token: { $in: requestBody.photoTokens } },
+            { $set: { consumed: true } }
+          );
+          console.log('[AddAssignmentPart] ✓ Marked token as consumed:', requestBody.photoTokens[0]);
+        } catch (dbErr: any) {
+          console.error('[AddAssignmentPart] ⚠️ Failed to mark token as consumed:', dbErr.message);
+          // Don't fail the request
+        }
+      }
+
+      console.log('[AddAssignmentPart] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AddAssignmentPart] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AddAssignmentPart] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to add assignment part' });
+  }
+});
+
+// POST /api/auth/vendor/parts - NO AUTH (proxies to external API)
+authRouter.post('/vendor/parts', async (req, res) => {
+  try {
+    console.log('[AddVendorPart] ========================================');
+    console.log('[AddVendorPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/parts`);
+    console.log('[AddVendorPart] Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[AddVendorPart] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/auth/vendor/parts`,
+        token,
+        'POST',
+        req.body
+      );
+      
+      console.log('[AddVendorPart] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[AddVendorPart] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[AddVendorPart] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to add part' });
+  }
+});
+
+// DELETE /api/auth/vendor/parts/:partId - NO AUTH (proxies to external API)
+authRouter.delete('/vendor/parts/:partId', async (req, res) => {
+  try {
+    const { partId } = req.params;
+    
+    console.log('[DeleteVendorPart] ========================================');
+    console.log('[DeleteVendorPart] Calling EXTERNAL API:', `${EXTERNAL_API_URL}/api/auth/vendor/parts/${partId}`);
+    console.log('[DeleteVendorPart] Part ID:', partId);
+    console.log('[DeleteVendorPart] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const externalResponse = await ExternalApiAdapter.callExternalApi(
+        `/api/auth/vendor/parts/${partId}`,
+        token,
+        'DELETE'
+      );
+      
+      console.log('[DeleteVendorPart] ✓ Returning external API response');
+      return res.json(externalResponse);
+    } catch (extErr: any) {
+      console.error('[DeleteVendorPart] ✗ External API call failed:', extErr.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: extErr.message || 'External API call failed' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[DeleteVendorPart] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to delete part' });
+  }
+});
+
+// GET /api/auth/photos/* - Download photo from external API
+authRouter.get('/photos/*', async (req, res) => {
+  try {
+    const photoPath = req.params[0]; // Gets everything after /photos/
+    const fullPath = `/uploads/photos/${photoPath}`;
+    
+    console.log('[DownloadPhoto] ========================================');
+    console.log('[DownloadPhoto] Downloading photo from EXTERNAL API:', `${EXTERNAL_API_URL}${fullPath}`);
+    console.log('[DownloadPhoto] Photo Path:', photoPath);
+    console.log('[DownloadPhoto] ========================================');
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+      const axios = require('axios');
+      const url = `${EXTERNAL_API_URL}${fullPath}`;
+      
+      const response = await axios({
+        method: 'GET',
+        url,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        responseType: 'stream', // Important: stream the image data
+        timeout: 30000,
+      });
+      
+      // Set content type from external API response
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      }
+      
+      // Set content length if available
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      
+      console.log('[DownloadPhoto] ✓ Streaming photo to client');
+      
+      // Pipe the image stream to response
+      response.data.pipe(res);
+    } catch (extErr: any) {
+      console.error('[DownloadPhoto] ✗ External API call failed:', extErr.message);
+      return res.status(extErr.response?.status || 500).json({ 
+        success: false, 
+        message: extErr.message || 'Failed to download photo' 
+      });
+    }
+  } catch (err: any) {
+    console.error('[DownloadPhoto] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to download photo' });
   }
 });

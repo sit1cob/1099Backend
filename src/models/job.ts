@@ -1,6 +1,7 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
 const JobSchema = new Schema({
+  externalId: { type: String, index: true, sparse: true }, // External API job ID
   soNumber: { type: String, required: true, unique: true, index: true },
   serviceUnitNumber: { type: String },
   serviceLocation: { type: String },

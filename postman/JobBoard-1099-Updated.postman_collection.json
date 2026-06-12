@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "1099 Job Board - Updated",
+    "name": "1099 Job Board - Updated V",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_postman_id": "e6f1f2f0-1a2b-4f2b-9f20-9b4edc0d1abc",
     "description": "Updated collection with part_status field and delete parts endpoints"
@@ -77,6 +77,7 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "if (json && json.data && json.data.accessToken) {",
+                  "  pm.environment.set('accessToken', json.data.accessToken);",
                   "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
                   "}"
                 ],
@@ -116,7 +117,31 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "vendors", "me"]
             }
-          }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/vendors/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "vendors", "me"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 456,\n    \"name\": \"John's Appliance Repair\",\n    \"phoneNumber\": \"555-0123\",\n    \"email\": \"vendor@example.com\",\n    \"isActive\": true,\n    \"createdAt\": \"2024-01-15T10:00:00Z\",\n    \"stats\": {\n      \"totalJobs\": 150,\n      \"completedJobs\": 145,\n      \"averageRating\": 4.8\n    }\n  }\n}"
+            }
+          ],
+          "description": "Get the authenticated vendor's profile information including stats (total jobs, completed jobs, average rating). This endpoint proxies to the external API."
         },
         {
           "name": "Update My Profile",
@@ -554,15 +579,123 @@
       ]
     },
     {
+      "name": "Parts",
+      "item": [
+        {
+          "name": "Delete Part by ID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/parts/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parts", "{{partId}}"]
+            }
+          },
+          "description": "Remove a part from the list. Proxies to external API."
+        },
+        {
+          "name": "Upload Part Photos",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/parts/{{partId}}/photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "parts", "{{partId}}", "photos"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos[]",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "photos[]",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "description",
+                  "value": "Defective part removed",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "description": "Upload photos for parts documentation. Maximum 10 photos per upload, 10MB per file. Saves to external API and MongoDB."
+        },
+        {
+          "name": "Delete Part Photos",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/parts/{{partId}}/photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "parts", "{{partId}}", "photos"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"photoIds\": [777, 778]\n}"
+            }
+          },
+          "description": "Remove uploaded photos for a part. Deletes from external API and MongoDB."
+        },
+        {
+          "name": "Add Part Photo (via /vendors/me/photos)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vendors/me/photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "vendors", "me", "photos"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "assignmentId",
+                  "value": "147",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Test upload",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "description": "Upload photos for assignment/part. Requires assignmentId. Maximum 10 photos per upload, 10MB per file. Saves to external API and MongoDB."
+        }
+      ]
+    },
+    {
       "name": "Uploads",
       "item": [
         {
           "name": "Upload Image to S3",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/uploads/image",
               "host": ["{{baseUrl}}"],
@@ -578,13 +711,29 @@
                 }
               ]
             }
-          }
+          },
+          "description": "Upload an image to S3. No authentication required. Returns the S3 URL."
+        },
+        {
+          "name": "Download Photo",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/photos/9fdbd116165487036c6588666b9a12ea",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "photos", "9fdbd116165487036c6588666b9a12ea"]
+            }
+          },
+          "description": "Download photo from external API. Streams the image from https://shs-1099-job-board.replit.app/uploads/photos/{photoId}"
         }
       ]
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://1099-app-93c69bc1721a38c3.elb.us-east-2.amazonaws.com" },
+    { "key": "baseUrl", "value": "http://localhost:5010" },
     { "key": "accessToken", "value": "" },
     { "key": "jobId", "value": "" },
     { "key": "assignmentId", "value": "" },

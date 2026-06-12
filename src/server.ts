@@ -13,6 +13,16 @@ import { usersRouter } from './routes/users';
 import { startJobWatcher } from './services/jobWatcher';
 import { partsRouter } from './routes/parts';
 import { uploadsRouter } from './routes/uploads';
+import { logsRouter } from './routes/logs';
+import textractRouter from './routes/textract';
+import { feedbackRouter } from './routes/feedback';
+import { analyticsRouter } from './routes/analytics';
+import { hspRouter } from './routes/hsp';
+import { prosRouter } from './routes/pros';
+import axios from 'axios';
+import { apiAnalyticsLogger } from './middleware/apiAnalytics';
+
+const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'https://shs-1099-job-board.replit.app';
 
 const PORT = Number(process.env.PORT || 5001);
 
@@ -27,6 +37,11 @@ async function main() {
   app.use(morgan('dev'));
   app.use(express.json());
   app.use(cookieParser());
+  app.use(apiAnalyticsLogger);
+
+  app.get('/', (_req, res) => {
+    res.json({ ok: true, service: 'job-board-mongo-api', message: 'Server is running' });
+  });
 
   app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'job-board-mongo-api' });
@@ -39,6 +54,55 @@ async function main() {
   app.use('/api/parts', partsRouter);
   app.use('/api/uploads', uploadsRouter);
   app.use('/api/users', usersRouter);
+  app.use('/api/logs', logsRouter);
+  app.use('/api/textract', textractRouter);
+  app.use('/api/feedback', feedbackRouter);
+  app.use('/api/analytics', analyticsRouter);
+  app.use('/api/hsp', hspRouter);
+  app.use('/api/pros', prosRouter);
+  app.use('/api', prosRouter);  // expose /api/v3/assignments/:id without /pros prefix
+
+  // Photo proxy route - mirrors external API structure
+  app.get('/uploads/photos/*', async (req, res) => {
+    try {
+      const photoPath = (req.params as any)[0];
+      const fullPath = `/uploads/photos/${photoPath}`;
+      
+      console.log('[PhotoProxy] Downloading photo:', `${EXTERNAL_API_URL}${fullPath}`);
+
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '';
+
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'No token provided' });
+      }
+
+      const response = await axios({
+        method: 'GET',
+        url: `${EXTERNAL_API_URL}${fullPath}`,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        responseType: 'stream',
+        timeout: 30000,
+      });
+      
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      }
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      
+      response.data.pipe(res);
+    } catch (err: any) {
+      console.error('[PhotoProxy] Error:', err.message);
+      return res.status(err.response?.status || 500).json({ 
+        success: false, 
+        message: err.message || 'Failed to download photo' 
+      });
+    }
+  });
 
   // Not found handler
   app.use((req, res) => {

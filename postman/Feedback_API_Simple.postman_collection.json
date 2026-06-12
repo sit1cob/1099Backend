@@ -1,0 +1,180 @@
+{
+  "info": {
+    "name": "Feedback API - Complete",
+    "description": "Complete feedback API: Login, Config Management, Submit & Get Feedback",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"your_username\",\n  \"password\": \"your_password\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "login"]
+        },
+        "description": "Login to get JWT token. Copy the token and set it in {{auth_token}} variable."
+      }
+    },
+    {
+      "name": "2. Get Feedback Config",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config"]
+        },
+        "description": "Get survey questions"
+      }
+    },
+    {
+      "name": "3. Submit Feedback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"metadata\": {\n    \"appVersion\": \"1.2.3\",\n    \"deviceModel\": \"Pixel 6\",\n    \"osVersion\": \"Android 13\",\n    \"timestamp\": \"2025-11-05T04:37:30Z\"\n  },\n  \"answers\": [\n    {\n      \"questionId\": \"q1\",\n      \"answer\": 4\n    },\n    {\n      \"questionId\": \"q2\",\n      \"answer\": \"Add dark mode support\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/feedback/submit",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "submit"]
+        },
+        "description": "Submit feedback (userId auto-extracted from token)"
+      }
+    },
+    {
+      "name": "4. Get All Feedback",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/feedback?limit=50",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "50",
+              "description": "Maximum number of feedback entries"
+            }
+          ]
+        },
+        "description": "Get all feedback submissions"
+      }
+    },
+    {
+      "name": "5. Add Question to Config",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"q3\",\n  \"question\": \"Would you recommend this app to others?\",\n  \"type\": \"rating\",\n  \"required\": true,\n  \"order\": 3\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config/question",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config", "question"]
+        },
+        "description": "Add a new question to feedback config. Types: rating, text, boolean, multiple_choice"
+      }
+    },
+    {
+      "name": "6. Update Question",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"How likely are you to recommend this app?\",\n  \"type\": \"rating\",\n  \"required\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config/question/q3",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config", "question", "q3"]
+        },
+        "description": "Update an existing question by ID"
+      }
+    },
+    {
+      "name": "7. Delete Question",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/feedback/config/question/q3",
+          "host": ["{{base_url}}"],
+          "path": ["api", "feedback", "config", "question", "q3"]
+        },
+        "description": "Delete a question from config by ID"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5001"
+    },
+    {
+      "key": "auth_token",
+      "value": ""
+    }
+  ]
+}
