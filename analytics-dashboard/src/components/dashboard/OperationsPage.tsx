@@ -75,7 +75,7 @@ function DirectoryView({
 
   const statusQ = useQuery({
     queryKey: ['ops-status-counts'],
-    queryFn: () => fetchStatusCounts(),
+    queryFn: () => fetchStatusCounts(getDateRange()),
     staleTime: 30000,
   });
 

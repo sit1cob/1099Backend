@@ -83,7 +83,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
     return () => document.removeEventListener('mousedown', handleClick);
   }, [vendorDropdownOpen]);
 
-  const dateParams = startDate && endDate ? { startDate, endDate } : undefined;
+  const dateParams = { startDate, endDate };
   const trendPeriod = trendRange === '7d' ? 'week' as const : trendRange === '12m' ? 'year' as const : 'month' as const;
 
   // Which granularities are valid for the active range
@@ -166,6 +166,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const sc = statusQ.data?.data;
   const vendorCount = vendorCountQ.data?.data?.total;
   const completedOverall = completedQ.data?.data?.overall;
+  const vbdTotals = vbdQ.data?.data?.totals;
   const totalJobs = sc ? (sc.JOB_CLAIMED + sc.JOB_ARRIVED + sc.JOB_COMPLETED + sc.JOB_RESCHEDULED + sc.PART_ORDER_SUBMITTED) : undefined;
   const unclaimed = totalJobs && sc ? totalJobs - sc.JOB_CLAIMED : undefined;
 
@@ -180,7 +181,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       kcRgb: '103,189,109',
       delta: '+15%',
       deltaUp: true,
-      value: fmt(completedOverall ?? sc?.JOB_COMPLETED),
+      value: fmt(vbdTotals?.JOB_COMPLETED ?? completedOverall ?? sc?.JOB_COMPLETED),
     },
     {
       key: 'claimed',
@@ -191,10 +192,10 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       kcRgb: '84,132,209',
       delta: '+12%',
       deltaUp: true,
-      value: fmt(sc?.JOB_CLAIMED),
+      value: fmt(vbdTotals?.JOB_CLAIMED ?? sc?.JOB_CLAIMED),
     },
     {
-      key: 'arrived',
+      key: 'inProgress',
       label: 'IN PROGRESS',
       sub: 'on-site now',
       iconPath: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10',
@@ -202,7 +203,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       kcRgb: '213,112,51',
       delta: '+8%',
       deltaUp: true,
-      value: fmt(sc?.JOB_ARRIVED),
+      value: fmt(vbdTotals?.JOB_IN_PROGRESS ?? sc?.JOB_IN_PROGRESS ?? sc?.JOB_ARRIVED),
     },
     {
       key: 'rescheduled',
@@ -213,7 +214,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       kcRgb: '217,84,89',
       delta: '+8%',
       deltaUp: false,
-      value: fmt(sc?.JOB_RESCHEDULED),
+      value: fmt(vbdTotals?.JOB_RESCHEDULED ?? sc?.JOB_RESCHEDULED),
     },
     {
       key: 'partOrders',
@@ -224,7 +225,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       kcRgb: '139,97,174',
       delta: '-1',
       deltaUp: false,
-      value: fmt(sc?.PART_ORDER_SUBMITTED),
+      value: fmt(vbdTotals?.PART_ORDER_SUBMITTED ?? sc?.PART_ORDER_SUBMITTED),
     },
     {
       key: 'vendors',
@@ -234,7 +235,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 7a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75',
       kc: '#33bde0',
       kcRgb: '51,189,224',
-      value: fmt(vendorCount),
+      value: fmt(vbdTotals?.totalVendors ?? vendorCount),
     },
   ];
 
@@ -347,7 +348,6 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   // ── Vendor tables (from new range API) ──
   const vbdRows: VendorStatusRow[] = vbdQ.data?.data?.data ?? [];
-  const vbdTotals = vbdQ.data?.data?.totals;
   const completedByVendor: CompletedVendor[] = completedQ.data?.data?.byVendor ?? [];
 
   const filteredByVendor = useMemo(() => {

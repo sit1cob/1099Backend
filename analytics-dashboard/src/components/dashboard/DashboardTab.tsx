@@ -27,7 +27,7 @@ export function DashboardTab() {
   } | null>(null);
 
   const dateParams =
-    startDate && endDate ? { startDate, endDate } : undefined;
+    { startDate, endDate };
 
   const vendorCountQuery = useQuery({
     queryKey: ['dashboard-vendor-count'],
