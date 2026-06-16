@@ -502,9 +502,20 @@ body.light .alert-banner.red { background: rgba(220,38,38,.06); border-color: rg
   font-size: var(--fs-sm);
   font-family: var(--font-mono);
   outline: none;
-  width: 110px;
+  width: 120px;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
+  display: inline-flex;
+  align-items: center;
+}
+.dr-input input[type="date"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
 }
 .dr-input::-webkit-calendar-picker-indicator { opacity: 0; position: absolute; right: 0; top: 0; width: 100%; height: 100%; cursor: pointer; }
 body.light .daterange { background: var(--card); }

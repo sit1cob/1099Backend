@@ -26,7 +26,7 @@ export function VendorsTable({ data, isLoading, onPageChange }: Props) {
       const header = 'ID,Name,Username,Email,Phone,Last Login';
       const rows = allVendors.map((v) => {
         const lastLogin = v.lastLoginAt
-          ? format(new Date(v.lastLoginAt), 'yyyy-MM-dd HH:mm')
+          ? format(new Date(v.lastLoginAt), 'MMM dd, yyyy hh:mm a')
           : '';
         const esc = (s: string | null) => {
           if (!s) return '';
@@ -102,7 +102,7 @@ export function VendorsTable({ data, isLoading, onPageChange }: Props) {
                 <td className="px-4 py-2.5 text-xs text-slate-500">{v.phone}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">
                   {v.lastLoginAt
-                    ? format(new Date(v.lastLoginAt), 'MMM d, yyyy h:mm a')
+                    ? format(new Date(v.lastLoginAt), 'MMM dd, yyyy hh:mm a')
                     : <span className="text-slate-300">Never</span>}
                 </td>
               </tr>

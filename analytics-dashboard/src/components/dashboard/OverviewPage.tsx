@@ -70,6 +70,10 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [trendFrom, setTrendFrom] = useState('2026-05-16');
   const [trendTo, setTrendTo] = useState('2026-06-12');
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
+  const trendFromRef = useRef<HTMLInputElement>(null);
+  const trendToRef = useRef<HTMLInputElement>(null);
 
   // Close vendor dropdown on click outside
   useEffect(() => {
@@ -388,13 +392,19 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <div className="daterange">
             <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--tx2)', marginRight: '4px' }}>Page</span>
             <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>From</span>
-            <input type="date" className="dr-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+            <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+              {format(new Date(startDate + 'T00:00:00'), 'MMM dd, yyyy')}
+              <input ref={startDateRef} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </span>
+            <svg onClick={() => startDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
             </svg>
             <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>To</span>
-            <input type="date" className="dr-input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+            <span className="dr-input" onClick={() => endDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+              {format(new Date(endDate + 'T00:00:00'), 'MMM dd, yyyy')}
+              <input ref={endDateRef} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </span>
+            <svg onClick={() => endDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
             </svg>
           </div>
@@ -543,9 +553,15 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                     <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                   </svg>
-                  <input type="date" className="dr-input" value={trendFrom} onChange={(e) => setTrendFrom(e.target.value)} />
+                  <span className="dr-input" onClick={() => trendFromRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+                    {format(new Date(trendFrom + 'T00:00:00'), 'MMM dd, yyyy')}
+                    <input ref={trendFromRef} type="date" value={trendFrom} onChange={(e) => setTrendFrom(e.target.value)} />
+                  </span>
                   <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>–</span>
-                  <input type="date" className="dr-input" value={trendTo} onChange={(e) => setTrendTo(e.target.value)} />
+                  <span className="dr-input" onClick={() => trendToRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+                    {format(new Date(trendTo + 'T00:00:00'), 'MMM dd, yyyy')}
+                    <input ref={trendToRef} type="date" value={trendTo} onChange={(e) => setTrendTo(e.target.value)} />
+                  </span>
                 </div>
               )}
             </div>
@@ -844,7 +860,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <td style={{ fontSize: 'var(--fs-base)', fontWeight: 500, color: 'var(--tx1)' }}>{v.name.length > 28 ? v.name.slice(0, 28) + '…' : v.name}</td>
                     <td className="font-mono" style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx2)' }}>{v.username}</td>
                     <td style={{ fontSize: 'var(--fs-sm)', color: v.lastLoginAt ? 'var(--tx1)' : 'var(--tx3)' }}>
-                      {v.lastLoginAt ? format(new Date(v.lastLoginAt), 'MMM d, yyyy') : '—'}
+                      {v.lastLoginAt ? format(new Date(v.lastLoginAt), 'MMM dd, yyyy') : '—'}
                     </td>
                   </tr>
                 ))

@@ -87,7 +87,7 @@ export function AnalyticsTable({ data, isLoading }: AnalyticsTableProps) {
               </td>
               <td className="px-4 py-3 text-xs text-slate-600">
                 <div className="font-medium">{format(new Date(record.createdAt), 'MMM dd, yyyy')}</div>
-                <div className="text-slate-500">{format(new Date(record.createdAt), 'HH:mm:ss')}</div>
+                <div className="text-slate-500">{format(new Date(record.createdAt), 'hh:mm a')}</div>
               </td>
             </tr>
           ))}

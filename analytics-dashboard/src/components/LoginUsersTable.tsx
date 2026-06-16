@@ -44,7 +44,7 @@ export function LoginUsersTable({ data, isLoading }: LoginUsersTableProps) {
               </td>
               <td className="px-4 py-3 text-[13px] font-semibold text-white font-mono">{row.totalLogins}</td>
               <td className="px-4 py-3 text-[13px] text-[#8498b7] font-mono">
-                {row.lastLoginAt ? format(new Date(row.lastLoginAt), 'MMM dd, yyyy HH:mm:ss') : '—'}
+                {row.lastLoginAt ? format(new Date(row.lastLoginAt), 'MMM dd, yyyy hh:mm a') : '—'}
               </td>
             </tr>
           ))}

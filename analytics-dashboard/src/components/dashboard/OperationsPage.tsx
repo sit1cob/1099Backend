@@ -105,7 +105,7 @@ function DirectoryView({
     if (!allVendors.length) return;
     const header = 'ID,Name,Username,Email,Phone,Last Login';
     const rows = allVendors.map((v) => {
-      const ll = v.lastLoginAt ? format(new Date(v.lastLoginAt), 'yyyy-MM-dd HH:mm') : '';
+      const ll = v.lastLoginAt ? format(new Date(v.lastLoginAt), 'MMM dd, yyyy hh:mm a') : '';
       return [v.id, `"${v.name}"`, v.username, v.email ?? '', v.phone, ll].join(',');
     });
     const csv = [header, ...rows].join('\n');
@@ -317,7 +317,7 @@ function VendorDetailView({ vendor, onBack }: { vendor: Vendor; onBack: () => vo
             <span>📞 {vendor.phone}</span>
             {vendor.email && <span>✉ {vendor.email}</span>}
             {vendor.lastLoginAt && (
-              <span>🕒 Last active {format(new Date(vendor.lastLoginAt), 'MMM dd')}</span>
+              <span>🕒 Last active {format(new Date(vendor.lastLoginAt), 'MMM dd, yyyy')}</span>
             )}
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 
 export type DashboardSettings = {
@@ -68,22 +69,16 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
         {/* DATE RANGE */}
         <Section title="DATE RANGE">
           <Row label="From">
-            <input
-              type="date"
-              value={local.startDate}
-              onChange={(e) => setLocal({ ...local, startDate: e.target.value })}
-              className="rounded-lg px-3 py-1.5 text-[13px] focus:outline-none"
-              style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}
-            />
+            <label className="rounded-lg px-3 py-1.5 text-[13px] relative inline-flex items-center cursor-pointer" style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{format(new Date(local.startDate + 'T00:00:00'), 'MMM dd, yyyy')}</span>
+              <input type="date" value={local.startDate} onChange={(e) => setLocal({ ...local, startDate: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+            </label>
           </Row>
           <Row label="To">
-            <input
-              type="date"
-              value={local.endDate}
-              onChange={(e) => setLocal({ ...local, endDate: e.target.value })}
-              className="rounded-lg px-3 py-1.5 text-[13px] focus:outline-none"
-              style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}
-            />
+            <label className="rounded-lg px-3 py-1.5 text-[13px] relative inline-flex items-center cursor-pointer" style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{format(new Date(local.endDate + 'T00:00:00'), 'MMM dd, yyyy')}</span>
+              <input type="date" value={local.endDate} onChange={(e) => setLocal({ ...local, endDate: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+            </label>
           </Row>
         </Section>
 
