@@ -73,7 +73,7 @@ export function DashboardTab() {
       <div>
         <h2 className="text-xl font-bold text-slate-900">Job Board Dashboard</h2>
         <p className="text-sm text-slate-500">
-          Live data from pros.shs.com — vendor counts, job statuses, and completion metrics
+          Live data from <span style={{ color: 'var(--tx1)', fontWeight: 700 }}>pros.shs.com</span> — vendor counts, job statuses, and completion metrics
         </p>
       </div>
 

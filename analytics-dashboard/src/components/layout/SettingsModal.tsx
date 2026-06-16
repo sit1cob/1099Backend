@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useTheme } from '../../context/ThemeContext';
 
 export type DashboardSettings = {
   theme: 'dark' | 'light';
@@ -20,10 +21,18 @@ type SettingsModalProps = {
 
 export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsModalProps) {
   const [local, setLocal] = useState<DashboardSettings>(settings);
+  const { theme: currentTheme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    if (isOpen) setLocal(settings);
+  }, [isOpen, settings]);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
+    if (local.theme !== currentTheme) {
+      toggleTheme();
+    }
     onSave(local);
     onClose();
   };
@@ -34,11 +43,11 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-[#0f1b2e] border border-slate-700/50 rounded-2xl shadow-2xl p-6 max-h-[85vh] overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[85vh] overflow-y-auto" style={{ background: 'var(--card)', border: '1px solid var(--border-2)' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-[18px] font-bold text-[#e6edf8]">Settings</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition">
+          <h2 className="text-[18px] font-bold" style={{ color: 'var(--tx1)' }}>Settings</h2>
+          <button onClick={onClose} className="p-1 rounded-lg transition" style={{ color: 'var(--tx3)' }}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -63,7 +72,8 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
               type="date"
               value={local.startDate}
               onChange={(e) => setLocal({ ...local, startDate: e.target.value })}
-              className="bg-[#1a2740] border border-slate-600/50 rounded-lg px-3 py-1.5 text-[13px] text-slate-300 focus:outline-none focus:border-blue-500"
+              className="rounded-lg px-3 py-1.5 text-[13px] focus:outline-none"
+              style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}
             />
           </Row>
           <Row label="To">
@@ -71,7 +81,8 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
               type="date"
               value={local.endDate}
               onChange={(e) => setLocal({ ...local, endDate: e.target.value })}
-              className="bg-[#1a2740] border border-slate-600/50 rounded-lg px-3 py-1.5 text-[13px] text-slate-300 focus:outline-none focus:border-blue-500"
+              className="rounded-lg px-3 py-1.5 text-[13px] focus:outline-none"
+              style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}
             />
           </Row>
         </Section>
@@ -112,10 +123,11 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
         </Section>
 
         {/* Footer buttons */}
-        <div className="flex items-center justify-center gap-3 mt-6 pt-4 border-t border-slate-700/40">
+        <div className="flex items-center justify-center gap-3 mt-6 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
           <button
             onClick={onClose}
-            className="px-5 py-2 text-[13px] font-medium text-slate-300 border border-slate-600/50 rounded-lg hover:bg-slate-700/50 transition"
+            className="px-5 py-2 text-[13px] font-medium rounded-lg transition"
+            style={{ color: 'var(--tx2)', border: '1px solid var(--border)' }}
           >
             Cancel
           </button>
@@ -136,7 +148,7 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-5">
-      <p className="text-[11px] font-semibold text-[#82889e] uppercase tracking-[0.6px] mb-2">{title}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.6px] mb-2" style={{ color: 'var(--tx3)' }}>{title}</p>
       <div className="space-y-1">{children}</div>
     </div>
   );
@@ -144,10 +156,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between bg-[#131b30] border border-slate-700/30 rounded-xl px-4 py-3">
+    <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--card-2)', border: '1px solid var(--border)' }}>
       <div>
-        <p className="text-[14px] font-medium text-[#e6edf8]">{label}</p>
-        {sub && <p className="text-[12px] text-[#82889e]">{sub}</p>}
+        <p className="text-[14px] font-medium" style={{ color: 'var(--tx1)' }}>{label}</p>
+        {sub && <p className="text-[12px]" style={{ color: 'var(--tx3)' }}>{sub}</p>}
       </div>
       {children}
     </div>
@@ -159,8 +171,8 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-[#1a2740] border border-slate-600/50 rounded-lg px-3 py-1.5 text-[13px] text-slate-300 focus:outline-none focus:border-blue-500 appearance-none pr-8 cursor-pointer"
-      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '14px' }}
+      className="rounded-lg px-3 py-1.5 text-[13px] focus:outline-none appearance-none pr-8 cursor-pointer"
+      style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '14px' }}
     >
       {options.map((opt) => (
         <option key={opt} value={opt}>{opt}</option>

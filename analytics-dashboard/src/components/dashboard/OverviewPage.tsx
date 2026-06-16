@@ -381,7 +381,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
         <div>
           <div className="phead-title">Job Board Dashboard</div>
           <div className="phead-sub" style={{ color: 'var(--tx2)' }}>
-            Live data from <span style={{ color: 'var(--blue)' }}>pros.shs.com</span> — vendor counts, job statuses, completion metrics
+            Live data from <span style={{ color: 'var(--tx1)', fontWeight: 700 }}>pros.shs.com</span> — vendor counts, job statuses, completion metrics
           </div>
         </div>
         <div className="flex items-center gap-3">

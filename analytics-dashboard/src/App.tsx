@@ -98,10 +98,13 @@ function App() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `kairos-overview_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed:', err);
+      alert('Export failed. Please try again.');
     }
   }, [settings.startDate, settings.endDate]);
 
@@ -113,7 +116,7 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 ml-[236px] flex flex-col" style={{ minHeight: '100vh' }}>
-        <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} />
+        <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onNavigate={setActivePage} />
         <main className="flex-1 p-6 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
           {activePage === 'Overview' && <OverviewPage onNavigate={setActivePage} />}
 

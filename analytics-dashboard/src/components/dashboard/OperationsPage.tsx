@@ -122,7 +122,7 @@ function DirectoryView({
     <div className="space-y-6">
       {/* Title */}
       <div>
-        <h1 className="text-[24px] font-bold text-[#e6edf8] leading-tight">Operations</h1>
+        <h1 className="text-[24px] font-bold leading-tight" style={{ color: 'var(--tx1)' }}>Operations</h1>
         <p className="text-[13px] text-[#8498b7]">Vendor performance, dispatch, and directory</p>
       </div>
 
