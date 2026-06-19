@@ -161,8 +161,8 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
   });
 
   const vbdQ = useQuery({
-    queryKey: ['dash-vbd', startDate, endDate],
-    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: 1, limit: 1000 }),
+    queryKey: ['dash-vbd', startDate, endDate, vbdPage, vbdSearch],
+    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: vbdPage, limit: 20 }),
     staleTime: 60000,
   });
 
@@ -352,21 +352,18 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   // ── Vendor tables (from new range API) ──
   const vbdRows: VendorStatusRow[] = vbdQ.data?.data?.data ?? [];
+  const vbdPagination = vbdQ.data?.data?.pagination;
   const completedByVendor: CompletedVendor[] = completedQ.data?.data?.byVendor ?? [];
 
   const filteredByVendor = useMemo(() => {
-    let list = vbdRows.filter((v) =>
-      !vbdSearch || v.vendorName.toLowerCase().includes(vbdSearch.toLowerCase()) || String(v.vendorId).includes(vbdSearch),
-    );
-    // Sort by completed desc
-    list.sort((a, b) => b.statusCounts.JOB_COMPLETED - a.statusCounts.JOB_COMPLETED);
+    let list = [...vbdRows];
     // Pin selected vendor to top
     if (selectedVendor) {
       const idx = list.findIndex((v) => v.vendorId === selectedVendor.id);
       if (idx > 0) { const [sel] = list.splice(idx, 1); list = [sel, ...list]; }
     }
     return list;
-  }, [vbdRows, vbdSearch, selectedVendor]);
+  }, [vbdRows, selectedVendor]);
 
   // Selected vendor stats for VBD summary
   const selectedVendorData = selectedVendor ? vbdRows.find((v) => v.vendorId === selectedVendor.id) : null;
@@ -748,7 +745,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search or widen the date window</p>
                   </td></tr>
               ) : (
-                filteredByVendor.slice((vbdPage - 1) * 20, vbdPage * 20).map((v, i) => {
+                filteredByVendor.map((v, i) => {
                   const s = v.statusCounts;
                   const isHighlighted = selectedVendor?.id === v.vendorId;
                   const selTdStyle = isHighlighted ? { background: 'var(--blue-l-bg)', boxShadow: 'inset 3px 0 0 var(--blue)' } : {};
@@ -778,10 +775,11 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
         </div>
 
         {/* Pagination */}
-        {filteredByVendor.length > 0 && (() => {
-          const totalPages = Math.ceil(filteredByVendor.length / 20);
+        {vbdPagination && vbdPagination.totalPages > 0 && (() => {
+          const totalPages = vbdPagination.totalPages;
+          const total = vbdPagination.total;
           const from = (vbdPage - 1) * 20 + 1;
-          const to = Math.min(vbdPage * 20, filteredByVendor.length);
+          const to = Math.min(vbdPage * 20, total);
           const pages: number[] = [];
           [1, 2, vbdPage - 1, vbdPage, vbdPage + 1, totalPages - 1, totalPages].forEach((n) => {
             if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n);
@@ -790,7 +788,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
           return (
             <div className="pgbar">
               <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>
-                Showing <strong style={{ color: 'var(--tx1)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--tx1)' }}>{filteredByVendor.length}</strong> vendors
+                Showing <strong style={{ color: 'var(--tx1)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--tx1)' }}>{total}</strong> vendors
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <button className="pgbtn" disabled={vbdPage <= 1} onClick={() => setVbdPage(vbdPage - 1)}>‹ Prev</button>
@@ -885,22 +883,6 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
         )}
       </div>
 
-      {/* ── Critical Alert ── */}
-      {sc && (
-        <div className="alert-banner red">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <div>
-            <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600, color: 'var(--tx1)' }}>
-              {fmt(unclaimed)} jobs unclaimed · {fmt(sc.PART_ORDER_SUBMITTED)} blocked on parts
-            </div>
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', marginTop: '2px' }}>
-              Review vendor assignments and part order pipeline
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
