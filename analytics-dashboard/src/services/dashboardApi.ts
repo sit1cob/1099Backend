@@ -181,6 +181,7 @@ export async function fetchVendorStatusRange(params: {
   endDate: string;
   page?: number;
   limit?: number;
+  search?: string;
 }): Promise<VendorStatusRangeResponse> {
   const { data } = await apiClient.get<VendorStatusRangeResponse>('/api/dashboard/vendors/jobs/range', {
     params,

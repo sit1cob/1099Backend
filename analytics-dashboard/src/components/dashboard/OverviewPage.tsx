@@ -162,7 +162,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   const vbdQ = useQuery({
     queryKey: ['dash-vbd', startDate, endDate, vbdPage, vbdSearch],
-    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: vbdPage, limit: 20 }),
+    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: vbdPage, limit: 20, search: vbdSearch || undefined }),
     staleTime: 60000,
   });
 
@@ -585,7 +585,10 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
             </div>
 
             {/* Reset */}
-            <button style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>Reset</button>
+            <button
+              onClick={() => { setTrendRange('page'); setTrendGroupBy('day'); setTrendFrom(startDate); setTrendTo(endDate); }}
+              style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
+            >Reset</button>
           </div>
 
           {/* Scope indicator */}

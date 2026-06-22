@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { fetchVendors } from '../../services/dashboardApi';
 
 type HeaderProps = {
   activePage?: string;
@@ -37,14 +38,33 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
   const [cmdIdx, setCmdIdx] = useState(0);
+  const [vendorResults, setVendorResults] = useState<{ id: number; name: string }[]>([]);
   const cmdRef = useRef<HTMLDivElement>(null);
   const cmdInputRef = useRef<HTMLInputElement>(null);
+  const vendorSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const filtered = SEARCH_PAGES.filter(
     (p) =>
       p.label.toLowerCase().includes(cmdQuery.toLowerCase()) ||
       p.sub.toLowerCase().includes(cmdQuery.toLowerCase()),
   );
+
+  // Debounced vendor search
+  useEffect(() => {
+    if (!cmdQuery || cmdQuery.length < 2) { setVendorResults([]); return; }
+    if (vendorSearchTimeout.current) clearTimeout(vendorSearchTimeout.current);
+    vendorSearchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await fetchVendors(1, 100);
+        const matches = res.data.data.filter((v) =>
+          v.name.toLowerCase().includes(cmdQuery.toLowerCase()) ||
+          v.username.toLowerCase().includes(cmdQuery.toLowerCase()),
+        ).slice(0, 5);
+        setVendorResults(matches.map((v) => ({ id: v.id, name: v.name })));
+      } catch { setVendorResults([]); }
+    }, 300);
+    return () => { if (vendorSearchTimeout.current) clearTimeout(vendorSearchTimeout.current); };
+  }, [cmdQuery]);
 
   const openCmd = useCallback(() => {
     setCmdOpen(true);
@@ -91,10 +111,17 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
   }, [cmdOpen, closeCmd]);
 
   // Keyboard navigation inside palette
+  const totalItems = filtered.length + vendorResults.length;
   const handleCmdKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIdx((i) => Math.min(i + 1, totalItems - 1)); }
     if (e.key === 'ArrowUp') { e.preventDefault(); setCmdIdx((i) => Math.max(i - 1, 0)); }
-    if (e.key === 'Enter' && filtered[cmdIdx]) { selectItem(filtered[cmdIdx].label); }
+    if (e.key === 'Enter') {
+      if (cmdIdx < filtered.length && filtered[cmdIdx]) {
+        selectItem(filtered[cmdIdx].label);
+      } else if (cmdIdx >= filtered.length) {
+        selectItem('Operations');
+      }
+    }
   };
 
   return (
@@ -142,30 +169,62 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
               <kbd className="px-1.5 py-0.5 text-[11px] rounded border" style={{ color: 'var(--tx3)', borderColor: 'var(--border)', background: 'var(--app-bg)' }}>ESC</kbd>
             </div>
             <div className="px-2 py-2 max-h-[320px] overflow-y-auto">
-              <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tx3)' }}>Pages</p>
-              {filtered.length === 0 && (
+              {filtered.length > 0 && (
+                <>
+                  <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tx3)' }}>Pages</p>
+                  {filtered.map((item, i) => (
+                    <button
+                      key={item.label}
+                      onClick={() => selectItem(item.label)}
+                      onMouseEnter={() => setCmdIdx(i)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
+                      style={{
+                        background: i === cmdIdx ? 'var(--blue-l-bg)' : 'transparent',
+                        color: i === cmdIdx ? 'var(--blue)' : 'var(--tx2)',
+                      }}
+                    >
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--app-bg)', border: '1px solid var(--border)' }}>
+                        <PageIcon type={item.icon} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium" style={{ color: 'var(--tx1)' }}>{item.label}</p>
+                        <p className="text-[11px]" style={{ color: 'var(--tx3)' }}>{item.sub}</p>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+              {vendorResults.length > 0 && (
+                <>
+                  <p className="px-2 py-1 mt-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tx3)' }}>Vendors</p>
+                  {vendorResults.map((v, i) => {
+                    const idx = filtered.length + i;
+                    return (
+                      <button
+                        key={v.id}
+                        onClick={() => selectItem('Operations')}
+                        onMouseEnter={() => setCmdIdx(idx)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
+                        style={{
+                          background: idx === cmdIdx ? 'var(--blue-l-bg)' : 'transparent',
+                          color: idx === cmdIdx ? 'var(--blue)' : 'var(--tx2)',
+                        }}
+                      >
+                        <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #0048BB, #010F43)' }}>
+                          {v.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium" style={{ color: 'var(--tx1)' }}>{v.name}</p>
+                          <p className="text-[11px]" style={{ color: 'var(--tx3)' }}>Vendor · ID {v.id}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              {filtered.length === 0 && vendorResults.length === 0 && cmdQuery.length > 0 && (
                 <p className="px-2 py-4 text-[13px] text-center" style={{ color: 'var(--tx3)' }}>No results found</p>
               )}
-              {filtered.map((item, i) => (
-                <button
-                  key={item.label}
-                  onClick={() => selectItem(item.label)}
-                  onMouseEnter={() => setCmdIdx(i)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
-                  style={{
-                    background: i === cmdIdx ? 'var(--blue-l-bg)' : 'transparent',
-                    color: i === cmdIdx ? 'var(--blue)' : 'var(--tx2)',
-                  }}
-                >
-                  <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--app-bg)', border: '1px solid var(--border)' }}>
-                    <PageIcon type={item.icon} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium" style={{ color: i === cmdIdx ? 'var(--tx1)' : 'var(--tx1)' }}>{item.label}</p>
-                    <p className="text-[11px]" style={{ color: 'var(--tx3)' }}>{item.sub}</p>
-                  </div>
-                </button>
-              ))}
             </div>
             <div className="flex items-center gap-4 px-4 py-2 border-t text-[11px]" style={{ borderColor: 'var(--border)', color: 'var(--tx3)' }}>
               <span>↑↓ navigate</span>

@@ -15,8 +15,8 @@ import { format } from 'date-fns';
 
 const DEFAULT_SETTINGS: DashboardSettings = {
   theme: 'dark',
-  startDate: '2026-03-30',
-  endDate: '2026-04-29',
+  startDate: '2026-05-16',
+  endDate: '2026-06-12',
   exportFormat: 'CSV',
   refreshInterval: '1 minute',
   showLastLogin: true,
