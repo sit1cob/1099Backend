@@ -64,7 +64,7 @@ export function VendorsTable({ data, isLoading, onPageChange }: Props) {
           <h3 className="text-sm font-semibold text-slate-700">All Vendors</h3>
           {pagination && (
             <p className="text-xs text-slate-400">
-              Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+              Showing {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} vendors
             </p>
           )}
         </div>

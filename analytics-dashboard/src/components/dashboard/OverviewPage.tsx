@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -35,13 +35,14 @@ type KpiConfig = {
   delta?: string;
   deltaUp?: boolean;
   useDateRange?: boolean;
+  tooltip?: string;
 };
 
 // ─── Trend Chart Config ──────────────────────────────────────────────
 const LINE_SERIES = [
-  { key: 'JOB_CLAIMED', label: 'Claimed', color: '#5484d1' },
-  { key: 'JOB_ARRIVED', label: 'Arrived', color: '#d57033' },
   { key: 'JOB_COMPLETED', label: 'Completed', color: '#67BD6D' },
+  { key: 'JOB_CLAIMED', label: 'Claimed', color: '#5484d1' },
+  { key: 'JOB_ARRIVED', label: 'In Progress', color: '#d57033' },
   { key: 'JOB_RESCHEDULED', label: 'Rescheduled', color: '#D95459' },
   { key: 'PART_ORDER_SUBMITTED', label: 'Part Orders', color: '#8b61ae' },
 ];
@@ -54,9 +55,9 @@ type TrendGroupBy = 'day' | 'week' | 'month';
 const fmt = (n: number | undefined) => n?.toLocaleString() ?? '—';
 
 // ─── Main Component ──────────────────────────────────────────────────
-export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
-  const [startDate, setStartDate] = useState('2026-05-16');
-  const [endDate, setEndDate] = useState('2026-06-12');
+export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: { onNavigate?: (page: string) => void; initialStartDate?: string; initialEndDate?: string }) {
+  const [startDate, setStartDate] = useState(initialStartDate || '2026-05-16');
+  const [endDate, setEndDate] = useState(initialEndDate || '2026-06-12');
   const [trendRange, setTrendRange] = useState<TrendRange>('page');
   const [trendView, setTrendView] = useState<TrendView>('chart');
   const [trendGroupBy, setTrendGroupBy] = useState<TrendGroupBy>('day');
@@ -74,6 +75,12 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const endDateRef = useRef<HTMLInputElement>(null);
   const trendFromRef = useRef<HTMLInputElement>(null);
   const trendToRef = useRef<HTMLInputElement>(null);
+
+  // Sync dates from settings
+  useEffect(() => {
+    if (initialStartDate) setStartDate(initialStartDate);
+    if (initialEndDate) setEndDate(initialEndDate);
+  }, [initialStartDate, initialEndDate]);
 
   // Close vendor dropdown on click outside
   useEffect(() => {
@@ -155,9 +162,15 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
   });
 
   const vendorsQ = useQuery({
-    queryKey: ['dash-vendors', vendorPage],
-    queryFn: () => fetchVendors(vendorPage, 20),
-    staleTime: 60000,
+    queryKey: ['dash-vendors-all'],
+    queryFn: () => fetchVendors(1, 500),
+    staleTime: 120000,
+  });
+
+  const allVendorsForDropdownQ = useQuery({
+    queryKey: ['dash-vbd-all', startDate, endDate],
+    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: 1, limit: 500 }),
+    staleTime: 120000,
   });
 
   const vbdQ = useQuery({
@@ -183,8 +196,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
       kc: '#67bd6d',
       kcRgb: '103,189,109',
-      delta: '+15%',
-      deltaUp: true,
+      tooltip: 'Jobs successfully completed during the selected period.',
       value: fmt(vbdTotals?.JOB_COMPLETED ?? completedOverall ?? sc?.JOB_COMPLETED),
     },
     {
@@ -194,8 +206,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
       kc: '#5484d1',
       kcRgb: '84,132,209',
-      delta: '+12%',
-      deltaUp: true,
+      tooltip: 'Jobs accepted by technicians during the selected period.',
       value: fmt(vbdTotals?.JOB_CLAIMED ?? sc?.JOB_CLAIMED),
     },
     {
@@ -205,8 +216,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10',
       kc: '#d57033',
       kcRgb: '213,112,51',
-      delta: '+8%',
-      deltaUp: true,
+      tooltip: 'Jobs currently being worked on and not yet completed.',
       value: fmt(vbdTotals?.JOB_IN_PROGRESS ?? sc?.JOB_IN_PROGRESS ?? sc?.JOB_ARRIVED),
     },
     {
@@ -216,8 +226,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
       kc: '#d95459',
       kcRgb: '217,84,89',
-      delta: '+8%',
-      deltaUp: false,
+      tooltip: 'Jobs moved to a different appointment date or time.',
       value: fmt(vbdTotals?.JOB_RESCHEDULED ?? sc?.JOB_RESCHEDULED),
     },
     {
@@ -227,8 +236,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z',
       kc: '#8b61ae',
       kcRgb: '139,97,174',
-      delta: '-1',
-      deltaUp: false,
+      tooltip: 'Parts orders created from technician workflows.',
       value: fmt(vbdTotals?.PART_ORDER_SUBMITTED ?? sc?.PART_ORDER_SUBMITTED),
     },
     {
@@ -239,6 +247,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
       iconPath: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 7a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75',
       kc: '#33bde0',
       kcRgb: '51,189,224',
+      tooltip: 'Vendors with activity during the selected period.',
       value: fmt(vbdTotals?.totalVendors ?? vendorCount),
     },
   ];
@@ -350,29 +359,87 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
     return v;
   };
 
+  // ── CSV download helper ──
+  const downloadCsv = useCallback((filename: string, header: string, rows: string[]) => {
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const exportTrendCsv = useCallback(() => {
+    if (!chartData.length) return;
+    const header = ['Date', ...LINE_SERIES.map((s) => s.label)].join(',');
+    const rows = chartData.map((d) =>
+      [formatLabel(d.period as string), ...LINE_SERIES.map((s) => d[s.key])].join(','),
+    );
+    downloadCsv(`kairos-trend_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
+  }, [chartData, downloadCsv]);
+
   // ── Vendor tables (from new range API) ──
   const vbdRows: VendorStatusRow[] = vbdQ.data?.data?.data ?? [];
   const vbdPagination = vbdQ.data?.data?.pagination;
   const completedByVendor: CompletedVendor[] = completedQ.data?.data?.byVendor ?? [];
+  const allDropdownVendors: VendorStatusRow[] = allVendorsForDropdownQ.data?.data?.data ?? [];
 
+  const exportVbdCsv = useCallback(() => {
+    if (!allDropdownVendors.length) return;
+    const header = 'Vendor,ID,Completed,Claimed,Rescheduled,Part Orders,First Time Fix';
+    const rows = allDropdownVendors.map((v) => {
+      const s = v.statusCounts;
+      return [`"${v.vendorName}"`, v.vendorId, s.JOB_COMPLETED, s.JOB_CLAIMED, s.JOB_RESCHEDULED, s.PART_ORDER_SUBMITTED, s.FIRST_TIME_FIX].join(',');
+    });
+    downloadCsv(`kairos-vendor-breakdown_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
+  }, [allDropdownVendors, downloadCsv]);
+
+  const exportVendorsCsv = useCallback(() => {
+    const v = vendorsQ.data?.data?.data;
+    if (!v?.length) return;
+    const header = 'ID,Name,Username,Last Login';
+    const rows = v.map((vendor) =>
+      [vendor.id, `"${vendor.name}"`, vendor.username, vendor.lastLoginAt ? format(new Date(vendor.lastLoginAt), 'MMM dd, yyyy') : ''].join(','),
+    );
+    downloadCsv(`kairos-vendors_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
+  }, [vendorsQ.data, downloadCsv]);
+
+  const isSearching = !!vbdSearch.trim();
   const filteredByVendor = useMemo(() => {
-    let list = [...vbdRows];
+    let list = isSearching
+      ? allDropdownVendors.filter((v) =>
+          v.vendorName.toLowerCase().includes(vbdSearch.toLowerCase()) ||
+          String(v.vendorId).includes(vbdSearch),
+        )
+      : [...vbdRows];
     // Pin selected vendor to top
     if (selectedVendor) {
       const idx = list.findIndex((v) => v.vendorId === selectedVendor.id);
       if (idx > 0) { const [sel] = list.splice(idx, 1); list = [sel, ...list]; }
     }
     return list;
-  }, [vbdRows, selectedVendor]);
+  }, [vbdRows, allDropdownVendors, vbdSearch, isSearching, selectedVendor]);
 
   // Selected vendor stats for VBD summary
   const selectedVendorData = selectedVendor ? vbdRows.find((v) => v.vendorId === selectedVendor.id) : null;
   const svCounts = selectedVendorData?.statusCounts;
   const vendors: Vendor[] = vendorsQ.data?.data?.data ?? [];
-  const allVendorsFiltered = vendors.filter((v) =>
+  const allVendorsSorted = useMemo(() =>
+    [...vendors].sort((a, b) => {
+      const dateA = a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0;
+      const dateB = b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0;
+      return dateB - dateA;
+    }),
+  [vendors]);
+  const allVendorsFiltered = allVendorsSorted.filter((v) =>
     !vendorSearch || v.name.toLowerCase().includes(vendorSearch.toLowerCase()) || v.username.toLowerCase().includes(vendorSearch.toLowerCase()),
   );
-  const pagination = vendorsQ.data?.data?.pagination;
+  const vendorTotalPages = Math.ceil(allVendorsFiltered.length / 20);
+  const vendorsPageSlice = allVendorsFiltered.slice((vendorPage - 1) * 20, vendorPage * 20);
   const lastUpdated = new Date();
 
   return (
@@ -426,9 +493,28 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
               <div className="kcard-top">
                 <div className="kcard-label">
                   {card.label}
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '4px', opacity: 0.5, verticalAlign: '-1px' }}>
-                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
+                  <span
+                    className="kpi-info-wrap"
+                    onMouseEnter={(e) => {
+                      const tip = e.currentTarget.querySelector('.kpi-info-tooltip') as HTMLElement;
+                      if (!tip) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      tip.style.top = `${rect.bottom + 8}px`;
+                      tip.style.left = `${rect.left + rect.width / 2}px`;
+                      tip.style.transform = 'translateX(-50%)';
+                      tip.style.visibility = 'visible';
+                      tip.style.opacity = '1';
+                    }}
+                    onMouseLeave={(e) => {
+                      const tip = e.currentTarget.querySelector('.kpi-info-tooltip') as HTMLElement;
+                      if (tip) { tip.style.visibility = 'hidden'; tip.style.opacity = '0'; }
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '4px', opacity: 0.5, verticalAlign: '-1px', cursor: 'help' }}>
+                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    {card.tooltip && <span className="kpi-info-tooltip">{card.tooltip}</span>}
+                  </span>
                 </div>
                 <span className="kcard-icon">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={card.kc} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -438,11 +524,6 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
               </div>
               <div className="kcard-val" style={{ marginTop: '8px' }}>{card.value}</div>
               <div className="kcard-delta-row">
-                {card.delta && (
-                  <span className={`kpi-delta ${card.deltaUp ? '' : 'down'}`}>
-                    {card.deltaUp ? '↑' : '↓'} {card.delta}
-                  </span>
-                )}
               </div>
               <div className="kcard-sub">{card.useDateRange === false ? card.sub : dateRangeLabel}</div>
             </div>
@@ -469,7 +550,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width="13" height="13" style={{ verticalAlign: '-2px', marginRight: '3px' }}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></svg>Table
                 </button>
               </div>
-              <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }}>↓ CSV</button>
+              <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportTrendCsv}>↓ CSV</button>
             </div>
           </div>
 
@@ -507,7 +588,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       >
                         All vendors
                       </div>
-                      {vbdRows
+                      {allDropdownVendors
                         .filter((v) => !vendorDropdownSearch || v.vendorName.toLowerCase().includes(vendorDropdownSearch.toLowerCase()))
                         .map((v) => (
                           <div
@@ -689,7 +770,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                 style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
               />
             </div>
-            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }}>↓ CSV</button>
+            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportVbdCsv}>↓ CSV</button>
           </div>
         </div>
 
@@ -701,12 +782,12 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
               <div className="vbd-stat-v">{selectedVendor ? 1 : fmt(vbdTotals?.totalVendors)}</div>
             </div>
             <div className="vbd-stat">
-              <div className="vbd-stat-l">Claimed</div>
-              <div className="vbd-stat-v" style={{ color: '#5484d1' }}>{fmt(svCounts ? svCounts.JOB_CLAIMED : vbdTotals?.JOB_CLAIMED)}</div>
-            </div>
-            <div className="vbd-stat">
               <div className="vbd-stat-l">Completed</div>
               <div className="vbd-stat-v" style={{ color: 'var(--green)' }}>{fmt(svCounts ? svCounts.JOB_COMPLETED : vbdTotals?.JOB_COMPLETED)}</div>
+            </div>
+            <div className="vbd-stat">
+              <div className="vbd-stat-l">Claimed</div>
+              <div className="vbd-stat-v" style={{ color: '#5484d1' }}>{fmt(svCounts ? svCounts.JOB_CLAIMED : vbdTotals?.JOB_CLAIMED)}</div>
             </div>
             <div className="vbd-stat">
               <div className="vbd-stat-l">Rescheduled</div>
@@ -729,8 +810,8 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
               <tr>
                 <th style={{ width: '28px' }}>#</th>
                 <th>Vendor</th>
-                <th style={{ textAlign: 'right', width: '90px' }}>Claimed</th>
                 <th style={{ textAlign: 'right', width: '100px' }}>Completed</th>
+                <th style={{ textAlign: 'right', width: '90px' }}>Claimed</th>
                 <th style={{ textAlign: 'right', width: '108px' }}>Rescheduled</th>
                 <th style={{ textAlign: 'right', width: '108px' }}>Part Orders</th>
                 <th style={{ textAlign: 'right', width: '112px' }}>First Time Fix</th>
@@ -748,7 +829,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search or widen the date window</p>
                   </td></tr>
               ) : (
-                filteredByVendor.map((v, i) => {
+                (isSearching ? filteredByVendor.slice((vbdPage - 1) * 20, vbdPage * 20) : filteredByVendor).map((v, i) => {
                   const s = v.statusCounts;
                   const isHighlighted = selectedVendor?.id === v.vendorId;
                   const selTdStyle = isHighlighted ? { background: 'var(--blue-l-bg)', boxShadow: 'inset 3px 0 0 var(--blue)' } : {};
@@ -764,8 +845,8 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <div style={{ fontSize: 'var(--fs-base)', fontWeight: isHighlighted ? 600 : 500, color: isHighlighted ? 'var(--blue)' : 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>
                         <div className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>ID: {v.vendorId}</div>
                       </td>
-                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{s.JOB_CLAIMED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{s.JOB_COMPLETED.toLocaleString()}</td>
+                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{s.JOB_CLAIMED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{s.JOB_RESCHEDULED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#8b61ae', fontWeight: 600 }}>{s.PART_ORDER_SUBMITTED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{s.FIRST_TIME_FIX.toLocaleString()}</td>
@@ -778,9 +859,9 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
         </div>
 
         {/* Pagination */}
-        {vbdPagination && vbdPagination.totalPages > 0 && (() => {
-          const totalPages = vbdPagination.totalPages;
-          const total = vbdPagination.total;
+        {((isSearching && filteredByVendor.length > 0) || (vbdPagination && vbdPagination.totalPages > 0)) && (() => {
+          const total = isSearching ? filteredByVendor.length : (vbdPagination?.total ?? 0);
+          const totalPages = isSearching ? Math.ceil(total / 20) : (vbdPagination?.totalPages ?? 0);
           const from = (vbdPage - 1) * 20 + 1;
           const to = Math.min(vbdPage * 20, total);
           const pages: number[] = [];
@@ -816,7 +897,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
         <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' }}>
           <div>
             <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>All Vendors</div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>{pagination ? `${pagination.total.toLocaleString()} total` : '—'}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>{vendors.length ? `${vendors.length.toLocaleString()} total` : '—'}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="card-search">
@@ -830,7 +911,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                 style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
               />
             </div>
-            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }}>↓ CSV</button>
+            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportVendorsCsv}>↓ CSV</button>
           </div>
         </div>
         <div className="card-scroll-wrap">
@@ -855,7 +936,7 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search</p>
                   </td></tr>
               ) : (
-                allVendorsFiltered.map((v) => (
+                vendorsPageSlice.map((v) => (
                   <tr key={v.id} onClick={() => setSelectedVendor({ id: v.id, name: v.name })}>
                     <td className="font-mono" style={{ color: 'var(--tx3)' }}>{v.id}</td>
                     <td style={{ fontSize: 'var(--fs-base)', fontWeight: 500, color: 'var(--tx1)' }}>{v.name.length > 28 ? v.name.slice(0, 28) + '…' : v.name}</td>
@@ -869,19 +950,19 @@ export function OverviewPage({ onNavigate }: { onNavigate?: (page: string) => vo
             </tbody>
           </table>
         </div>
-        {pagination && pagination.totalPages > 1 && (
+        {vendorTotalPages > 1 && (
           <div className="pgbar">
             <span style={{ color: 'var(--tx3)' }}>
-              Showing <strong style={{ color: 'var(--tx1)' }}>1–{vendors.length}</strong> of <strong style={{ color: 'var(--tx1)' }}>{pagination.total.toLocaleString()}</strong> vendors
+              Showing <strong style={{ color: 'var(--tx1)' }}>{(vendorPage - 1) * 20 + 1}–{Math.min(vendorPage * 20, allVendorsFiltered.length)}</strong> of <strong style={{ color: 'var(--tx1)' }}>{allVendorsFiltered.length.toLocaleString()}</strong> vendors
             </span>
             <div style={{ flex: 1 }} />
-            <button className="pgbtn" disabled={pagination.page <= 1} onClick={() => setVendorPage(pagination.page - 1)}>‹ Prev</button>
-            <button className="pgbtn on">{pagination.page}</button>
-            {pagination.page + 1 <= pagination.totalPages && <button className="pgbtn" onClick={() => setVendorPage(pagination.page + 1)}>{pagination.page + 1}</button>}
-            {pagination.page + 2 <= pagination.totalPages && <button className="pgbtn" onClick={() => setVendorPage(pagination.page + 2)}>{pagination.page + 2}</button>}
-            {pagination.totalPages > pagination.page + 2 && <span style={{ padding: '0 6px', color: 'var(--tx3)' }}>…</span>}
-            {pagination.totalPages > pagination.page + 2 && <button className="pgbtn" onClick={() => setVendorPage(pagination.totalPages)}>{pagination.totalPages}</button>}
-            <button className="pgbtn" disabled={pagination.page >= pagination.totalPages} onClick={() => setVendorPage(pagination.page + 1)}>Next ›</button>
+            <button className="pgbtn" disabled={vendorPage <= 1} onClick={() => setVendorPage(vendorPage - 1)}>‹ Prev</button>
+            <button className="pgbtn on">{vendorPage}</button>
+            {vendorPage + 1 <= vendorTotalPages && <button className="pgbtn" onClick={() => setVendorPage(vendorPage + 1)}>{vendorPage + 1}</button>}
+            {vendorPage + 2 <= vendorTotalPages && <button className="pgbtn" onClick={() => setVendorPage(vendorPage + 2)}>{vendorPage + 2}</button>}
+            {vendorTotalPages > vendorPage + 2 && <span style={{ padding: '0 6px', color: 'var(--tx3)' }}>…</span>}
+            {vendorTotalPages > vendorPage + 2 && <button className="pgbtn" onClick={() => setVendorPage(vendorTotalPages)}>{vendorTotalPages}</button>}
+            <button className="pgbtn" disabled={vendorPage >= vendorTotalPages} onClick={() => setVendorPage(vendorPage + 1)}>Next ›</button>
           </div>
         )}
       </div>

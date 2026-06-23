@@ -118,7 +118,7 @@ function App() {
       <div className="flex-1 ml-[236px] flex flex-col" style={{ minHeight: '100vh' }}>
         <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onNavigate={setActivePage} />
         <main className="flex-1 p-6 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
-          {activePage === 'Overview' && <OverviewPage onNavigate={setActivePage} />}
+          {activePage === 'Overview' && <OverviewPage onNavigate={setActivePage} initialStartDate={settings.startDate} initialEndDate={settings.endDate} />}
 
           {activePage === 'Unique Users' && (
             <div>

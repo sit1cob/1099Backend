@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -23,6 +23,8 @@ type SettingsModalProps = {
 export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsModalProps) {
   const [local, setLocal] = useState<DashboardSettings>(settings);
   const { theme: currentTheme, toggleTheme } = useTheme();
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) setLocal(settings);
@@ -69,16 +71,26 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
         {/* DATE RANGE */}
         <Section title="DATE RANGE">
           <Row label="From">
-            <label className="rounded-lg px-3 py-1.5 text-[13px] relative inline-flex items-center cursor-pointer" style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}>
+            <button
+              type="button"
+              onClick={() => startDateRef.current?.showPicker()}
+              className="rounded-lg px-3 py-1.5 text-[13px] inline-flex items-center cursor-pointer"
+              style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)', position: 'relative' }}
+            >
               <span style={{ fontFamily: 'var(--font-mono)' }}>{format(new Date(local.startDate + 'T00:00:00'), 'MMM dd, yyyy')}</span>
-              <input type="date" value={local.startDate} onChange={(e) => setLocal({ ...local, startDate: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
-            </label>
+              <input ref={startDateRef} type="date" value={local.startDate} onChange={(e) => setLocal({ ...local, startDate: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+            </button>
           </Row>
           <Row label="To">
-            <label className="rounded-lg px-3 py-1.5 text-[13px] relative inline-flex items-center cursor-pointer" style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)' }}>
+            <button
+              type="button"
+              onClick={() => endDateRef.current?.showPicker()}
+              className="rounded-lg px-3 py-1.5 text-[13px] inline-flex items-center cursor-pointer"
+              style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', color: 'var(--tx2)', position: 'relative' }}
+            >
               <span style={{ fontFamily: 'var(--font-mono)' }}>{format(new Date(local.endDate + 'T00:00:00'), 'MMM dd, yyyy')}</span>
-              <input type="date" value={local.endDate} onChange={(e) => setLocal({ ...local, endDate: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
-            </label>
+              <input ref={endDateRef} type="date" value={local.endDate} onChange={(e) => setLocal({ ...local, endDate: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+            </button>
           </Row>
         </Section>
 
