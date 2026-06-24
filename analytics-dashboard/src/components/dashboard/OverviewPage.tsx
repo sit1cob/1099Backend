@@ -42,7 +42,7 @@ type KpiConfig = {
 const LINE_SERIES = [
   { key: 'JOB_COMPLETED', label: 'Completed', color: '#67BD6D' },
   { key: 'JOB_CLAIMED', label: 'Claimed', color: '#5484d1' },
-  { key: 'JOB_ARRIVED', label: 'In Progress', color: '#d57033' },
+  { key: 'JOB_IN_PROGRESS', label: 'In Progress', color: '#d57033' },
   { key: 'JOB_RESCHEDULED', label: 'Rescheduled', color: '#D95459' },
   { key: 'PART_ORDER_SUBMITTED', label: 'Part Orders', color: '#8b61ae' },
 ];
