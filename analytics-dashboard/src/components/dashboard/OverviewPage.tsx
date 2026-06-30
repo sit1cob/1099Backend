@@ -44,7 +44,6 @@ const LINE_SERIES = [
   { key: 'JOB_CLAIMED', label: 'Claimed', color: '#5484d1' },
   { key: 'JOB_IN_PROGRESS', label: 'In Progress', color: '#d57033' },
   { key: 'JOB_RESCHEDULED', label: 'Rescheduled', color: '#D95459' },
-  { key: 'PART_ORDER_SUBMITTED', label: 'Part Orders', color: '#8b61ae' },
 ];
 
 type TrendRange = 'page' | '7d' | '30d' | '12m' | 'custom';
@@ -230,16 +229,6 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
       value: fmt(vbdTotals?.JOB_RESCHEDULED ?? sc?.JOB_RESCHEDULED),
     },
     {
-      key: 'partOrders',
-      label: 'PART ORDERS',
-      sub: 'this period',
-      iconPath: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z',
-      kc: '#8b61ae',
-      kcRgb: '139,97,174',
-      tooltip: 'Parts orders created from technician workflows.',
-      value: fmt(vbdTotals?.PART_ORDER_SUBMITTED ?? sc?.PART_ORDER_SUBMITTED),
-    },
-    {
       key: 'vendors',
       label: 'ACTIVE VENDORS',
       sub: 'total registered',
@@ -390,10 +379,10 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   const exportVbdCsv = useCallback(() => {
     if (!allDropdownVendors.length) return;
-    const header = 'Vendor,ID,Completed,Claimed,Rescheduled,Part Orders,First Time Fix';
+    const header = 'Vendor,ID,Completed,Claimed,Rescheduled,First Time Fix';
     const rows = allDropdownVendors.map((v) => {
       const s = v.statusCounts;
-      return [`"${v.vendorName}"`, v.vendorId, s.JOB_COMPLETED, s.JOB_CLAIMED, s.JOB_RESCHEDULED, s.PART_ORDER_SUBMITTED, s.FIRST_TIME_FIX].join(',');
+      return [`"${v.vendorName}"`, v.vendorId, s.JOB_COMPLETED, s.JOB_CLAIMED, s.JOB_RESCHEDULED, s.FIRST_TIME_FIX].join(',');
     });
     downloadCsv(`kairos-vendor-breakdown_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
   }, [allDropdownVendors, downloadCsv]);
@@ -794,10 +783,6 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
               <div className="vbd-stat-v" style={{ color: '#D95459' }}>{fmt(svCounts ? svCounts.JOB_RESCHEDULED : vbdTotals?.JOB_RESCHEDULED)}</div>
             </div>
             <div className="vbd-stat">
-              <div className="vbd-stat-l">Part Orders</div>
-              <div className="vbd-stat-v" style={{ color: '#8b61ae' }}>{fmt(svCounts ? svCounts.PART_ORDER_SUBMITTED : vbdTotals?.PART_ORDER_SUBMITTED)}</div>
-            </div>
-            <div className="vbd-stat">
               <div className="vbd-stat-l">First Time Fix</div>
               <div className="vbd-stat-v">{fmt(svCounts ? svCounts.FIRST_TIME_FIX : vbdTotals?.FIRST_TIME_FIX)}</div>
             </div>
@@ -813,15 +798,14 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                 <th style={{ textAlign: 'right', width: '100px' }}>Completed</th>
                 <th style={{ textAlign: 'right', width: '90px' }}>Claimed</th>
                 <th style={{ textAlign: 'right', width: '108px' }}>Rescheduled</th>
-                <th style={{ textAlign: 'right', width: '108px' }}>Part Orders</th>
                 <th style={{ textAlign: 'right', width: '112px' }}>First Time Fix</th>
               </tr>
             </thead>
             <tbody>
               {vbdQ.isLoading ? (
-                <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+                <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
               ) : filteredByVendor.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                <tr><td colSpan={6} style={{ padding: '40px 24px', textAlign: 'center' }}>
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
                       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
@@ -848,7 +832,6 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{s.JOB_COMPLETED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{s.JOB_CLAIMED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{s.JOB_RESCHEDULED.toLocaleString()}</td>
-                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#8b61ae', fontWeight: 600 }}>{s.PART_ORDER_SUBMITTED.toLocaleString()}</td>
                       <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{s.FIRST_TIME_FIX.toLocaleString()}</td>
                     </tr>
                   );
