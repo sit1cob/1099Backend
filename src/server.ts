@@ -19,6 +19,7 @@ import { feedbackRouter } from './routes/feedback';
 import { analyticsRouter } from './routes/analytics';
 import { hspRouter } from './routes/hsp';
 import { prosRouter } from './routes/pros';
+import debugRouter from './routes/debug';
 import axios from 'axios';
 import { apiAnalyticsLogger } from './middleware/apiAnalytics';
 
@@ -61,6 +62,7 @@ async function main() {
   app.use('/api/hsp', hspRouter);
   app.use('/api/pros', prosRouter);
   app.use('/api', prosRouter);  // expose /api/v3/assignments/:id without /pros prefix
+  app.use('/api/debug', debugRouter);  // Debug endpoint to check headers
 
   // Photo proxy route - mirrors external API structure
   app.get('/uploads/photos/*', async (req, res) => {

@@ -1272,11 +1272,7 @@ assignmentsRouter.put('/:id/schedule', async (req: AuthenticatedRequest, res) =>
     try {
       const updateData: any = {
         scheduledDate: new Date(newScheduledDate),
-<<<<<<< HEAD
         status: 'rescheduled',
-=======
-        status: 'rescheduled', // Change status to rescheduled
->>>>>>> bhavna_new_dashboard_UI
       };
       
       if (newTimeWindow) {
