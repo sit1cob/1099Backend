@@ -102,19 +102,6 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
     <header className="h-[52px] bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between px-5 sticky top-0 z-[100]">
       <div className="flex items-center gap-2">
         <h2 className="text-[13px] font-medium text-[var(--tx2)] whitespace-nowrap">{activePage}</h2>
-        <span className="text-[var(--tx3)] text-[13px]">/</span>
-        <div
-          className="relative flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer"
-          style={{ background: 'var(--app-bg)', border: '1px solid var(--border)', minWidth: '200px', maxWidth: '320px', flex: 1 }}
-          onClick={openCmd}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <span className="text-[13px] text-[var(--tx3)]" style={{ fontFamily: 'var(--font-sans)' }}>
-            Search... (⌘K)
-          </span>
-        </div>
       </div>
 
       {/* Command Palette */}

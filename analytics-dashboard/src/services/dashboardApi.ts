@@ -136,7 +136,7 @@ export type VendorJobsResponse = {
 // --- API calls ---
 
 export async function fetchVendorCount(): Promise<VendorCountResponse> {
-  const { data } = await apiClient.get<VendorCountResponse>('/api/dashboard/vendors/count');
+  const { data } = await apiClient.get<VendorCountResponse>('/api/dashboard/vendors/9');
   return data;
 }
 

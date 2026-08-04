@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {
-  fetchVendorCount,
   fetchVendors,
   fetchCompletedJobs,
   fetchStatusCounts,
@@ -55,8 +54,16 @@ const fmt = (n: number | undefined) => n?.toLocaleString() ?? '—';
 
 // ─── Main Component ──────────────────────────────────────────────────
 export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: { onNavigate?: (page: string) => void; initialStartDate?: string; initialEndDate?: string }) {
-  const [startDate, setStartDate] = useState(initialStartDate || '2026-05-16');
-  const [endDate, setEndDate] = useState(initialEndDate || '2026-06-12');
+  const [startDate, setStartDate] = useState(() => {
+    if (initialStartDate) return initialStartDate;
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [endDate, setEndDate] = useState(() => {
+    if (initialEndDate) return initialEndDate;
+    return new Date().toISOString().slice(0, 10);
+  });
   const [trendRange, setTrendRange] = useState<TrendRange>('page');
   const [trendView, setTrendView] = useState<TrendView>('chart');
   const [trendGroupBy, setTrendGroupBy] = useState<TrendGroupBy>('day');
@@ -135,11 +142,6 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const dateRangeLabel = `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
 
   // ── Data queries ──
-  const vendorCountQ = useQuery({
-    queryKey: ['dash-vendor-count'],
-    queryFn: fetchVendorCount,
-    staleTime: 60000,
-  });
 
   const statusQ = useQuery({
     queryKey: ['dash-status', startDate, endDate],
@@ -180,7 +182,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   // ── Derived ──
   const sc = statusQ.data?.data;
-  const vendorCount = vendorCountQ.data?.data?.total;
+  const vendorCount = 9;
   const completedOverall = completedQ.data?.data?.overall;
   const vbdTotals = vbdQ.data?.data?.totals;
   const totalJobs = sc ? (sc.JOB_CLAIMED + sc.JOB_ARRIVED + sc.JOB_COMPLETED + sc.JOB_RESCHEDULED + sc.PART_ORDER_SUBMITTED) : undefined;
@@ -237,7 +239,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
       kc: '#33bde0',
       kcRgb: '51,189,224',
       tooltip: 'Vendors with activity during the selected period.',
-      value: fmt(vbdTotals?.totalVendors ?? vendorCount),
+      value: fmt(vendorCount),
     },
   ];
 
@@ -437,9 +439,6 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
       <div className="phead">
         <div>
           <div className="phead-title">Job Board Dashboard</div>
-          <div className="phead-sub" style={{ color: 'var(--tx2)' }}>
-            Live data from <span style={{ color: 'var(--tx1)', fontWeight: 700 }}>pros.shs.com</span> — vendor counts, job statuses, completion metrics
-          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="daterange">
@@ -463,7 +462,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
           </div>
           <div className="freshness">
             <span className="freshness-dot" />
-            Updated {format(lastUpdated, 'MMM dd, yyyy')} · Snowflake
+            Updated {format(lastUpdated, 'MMM dd, yyyy')}
           </div>
         </div>
       </div>

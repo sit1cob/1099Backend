@@ -13,10 +13,13 @@ import { fetchFeedback, fetchLoginUsers } from './services/api';
 import { fetchVendors, fetchCompletedJobs } from './services/dashboardApi';
 import { format } from 'date-fns';
 
+const oneMonthAgo = new Date();
+oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
 const DEFAULT_SETTINGS: DashboardSettings = {
   theme: 'dark',
-  startDate: '2026-05-16',
-  endDate: '2026-06-12',
+  startDate: oneMonthAgo.toISOString().slice(0, 10),
+  endDate: new Date().toISOString().slice(0, 10),
   exportFormat: 'CSV',
   refreshInterval: '1 minute',
   showLastLogin: true,
