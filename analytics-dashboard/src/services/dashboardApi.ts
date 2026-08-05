@@ -65,18 +65,29 @@ export type StatusCounts = {
   JOB_RESCHEDULED: number;
   PART_ORDER_SUBMITTED: number;
   FIRST_TIME_FIX?: number;
+  JOBS_OFFERED?: number;
+  CLAIM_RATE?: number;
+  JOBS_UNCLAIMED?: number;
+  JOBS_CLAIMED?: number;
+  JOBS_COMPLETED?: number;
+  JOBS_INPROGRESS?: number;
+  JOBS_RESCHEDULED?: number;
 };
 
 export type VendorStatusRow = {
   vendorId: number;
   vendorName: string;
   statusCounts: {
-    JOB_CLAIMED: number;
-    JOB_IN_PROGRESS: number;
-    JOB_COMPLETED: number;
-    JOB_RESCHEDULED: number;
-    PART_ORDER_SUBMITTED: number;
-    FIRST_TIME_FIX: number;
+    JOB_CLAIMED?: number;
+    JOB_IN_PROGRESS?: number;
+    JOB_COMPLETED?: number;
+    JOB_RESCHEDULED?: number;
+    PART_ORDER_SUBMITTED?: number;
+    FIRST_TIME_FIX?: number;
+    JOBS_CLAIMED?: number;
+    JOBS_COMPLETED?: number;
+    JOBS_INPROGRESS?: number;
+    JOBS_RESCHEDULED?: number;
   };
 };
 
@@ -92,12 +103,16 @@ export type VendorStatusRangeResponse = {
     };
     totals: {
       totalVendors: number;
-      JOB_CLAIMED: number;
-      JOB_IN_PROGRESS: number;
-      JOB_COMPLETED: number;
-      JOB_RESCHEDULED: number;
-      PART_ORDER_SUBMITTED: number;
-      FIRST_TIME_FIX: number;
+      JOB_CLAIMED?: number;
+      JOB_IN_PROGRESS?: number;
+      JOB_COMPLETED?: number;
+      JOB_RESCHEDULED?: number;
+      PART_ORDER_SUBMITTED?: number;
+      FIRST_TIME_FIX?: number;
+      JOBS_CLAIMED?: number;
+      JOBS_COMPLETED?: number;
+      JOBS_INPROGRESS?: number;
+      JOBS_RESCHEDULED?: number;
     };
   };
   message: string;

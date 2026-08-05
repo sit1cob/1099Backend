@@ -502,13 +502,15 @@ body.light .alert-banner.red { background: rgba(220,38,38,.06); border-color: rg
   font-size: var(--fs-sm);
   font-family: var(--font-mono);
   outline: none;
-  width: 120px;
+  width: auto;
+  min-width: 120px;
   cursor: pointer;
   overflow: visible;
   display: inline-flex;
   align-items: center;
 }
-.dr-input input[type="date"] {
+.dr-input input[type="date"],
+.dr-input input[type="month"] {
   position: absolute;
   inset: 0;
   width: 100%;

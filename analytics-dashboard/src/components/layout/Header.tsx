@@ -100,8 +100,12 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
 
   return (
     <header className="h-[52px] bg-[var(--card)] border-b border-[var(--border)] flex items-center justify-between px-5 sticky top-0 z-[100]">
-      <div className="flex items-center gap-2">
-        <h2 className="text-[13px] font-medium text-[var(--tx2)] whitespace-nowrap">{activePage}</h2>
+      <div className="flex items-center gap-3">
+        <div style={{ width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg, #35d4c7, #60a5fa)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#04121c', fontSize: 15, fontFamily: 'var(--font-sans)' }}>K</div>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--tx1)', letterSpacing: '.2px' }}>Sears KAIros</div>
+          <div style={{ fontSize: 11, color: 'var(--tx3)', letterSpacing: '.4px', textTransform: 'uppercase' }}>1099 Operations</div>
+        </div>
       </div>
 
       {/* Command Palette */}
@@ -168,8 +172,7 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
         </div>
       )}
 
-      <div className="flex items-center gap-1">
-        {/* Notifications — hidden until functional */}
+      <div className="flex items-center gap-3">
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}

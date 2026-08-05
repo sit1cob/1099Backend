@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -56,14 +56,16 @@ const fmt = (n: number | undefined) => n?.toLocaleString() ?? '—';
 export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: { onNavigate?: (page: string) => void; initialStartDate?: string; initialEndDate?: string }) {
   const [startDate, setStartDate] = useState(() => {
     if (initialStartDate) return initialStartDate;
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().slice(0, 10);
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   });
   const [endDate, setEndDate] = useState(() => {
     if (initialEndDate) return initialEndDate;
-    return new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
+  const [dateMode, setDateMode] = useState<'month' | 'custom'>('month');
   const [trendRange, setTrendRange] = useState<TrendRange>('page');
   const [trendView, setTrendView] = useState<TrendView>('chart');
   const [trendGroupBy, setTrendGroupBy] = useState<TrendGroupBy>('day');
@@ -182,66 +184,26 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   // ── Derived ──
   const sc = statusQ.data?.data;
-  const vendorCount = 9;
-  const completedOverall = completedQ.data?.data?.overall;
   const vbdTotals = vbdQ.data?.data?.totals;
-  const totalJobs = sc ? (sc.JOB_CLAIMED + sc.JOB_ARRIVED + sc.JOB_COMPLETED + sc.JOB_RESCHEDULED + sc.PART_ORDER_SUBMITTED) : undefined;
-  const unclaimed = totalJobs && sc ? totalJobs - sc.JOB_CLAIMED : undefined;
 
-  // ── KPI Cards (7 columns) ──
-  const kpiCards: (KpiConfig & { value: number | string })[] = [
-    {
-      key: 'completed',
-      label: 'COMPLETED',
-      sub: 'this period',
-      iconPath: 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
-      kc: '#67bd6d',
-      kcRgb: '103,189,109',
-      tooltip: 'Jobs successfully completed during the selected period.',
-      value: fmt(vbdTotals?.JOB_COMPLETED ?? completedOverall ?? sc?.JOB_COMPLETED),
-    },
-    {
-      key: 'claimed',
-      label: 'CLAIMED',
-      sub: 'this period',
-      iconPath: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
-      kc: '#5484d1',
-      kcRgb: '84,132,209',
-      tooltip: 'Jobs accepted by technicians during the selected period.',
-      value: fmt(vbdTotals?.JOB_CLAIMED ?? sc?.JOB_CLAIMED),
-    },
-    {
-      key: 'inProgress',
-      label: 'IN PROGRESS',
-      sub: 'on-site now',
-      iconPath: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10',
-      kc: '#d57033',
-      kcRgb: '213,112,51',
-      tooltip: 'Jobs currently being worked on and not yet completed.',
-      value: fmt(vbdTotals?.JOB_IN_PROGRESS ?? sc?.JOB_IN_PROGRESS ?? sc?.JOB_ARRIVED),
-    },
-    {
-      key: 'rescheduled',
-      label: 'RESCHEDULED',
-      sub: 'this period',
-      iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-      kc: '#d95459',
-      kcRgb: '217,84,89',
-      tooltip: 'Jobs moved to a different appointment date or time.',
-      value: fmt(vbdTotals?.JOB_RESCHEDULED ?? sc?.JOB_RESCHEDULED),
-    },
-    {
-      key: 'vendors',
-      label: 'ACTIVE VENDORS',
-      sub: 'total registered',
-      useDateRange: false,
-      iconPath: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 7a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75',
-      kc: '#33bde0',
-      kcRgb: '51,189,224',
-      tooltip: 'Vendors with activity during the selected period.',
-      value: fmt(vendorCount),
-    },
-  ];
+  // Demand Funnel metrics (mapped to API fields: JOBS_OFFERED, CLAIM_RATE, JOBS_UNCLAIMED, JOBS_CLAIMED, JOBS_COMPLETED)
+  const jobsOffered = sc?.JOBS_OFFERED ?? 0;
+  const claimRate = sc?.CLAIM_RATE ?? 0;
+  const jobsUnclaimed = sc?.JOBS_UNCLAIMED ?? 0;
+  const jobsClaimed = sc?.JOBS_CLAIMED ?? sc?.JOB_CLAIMED ?? 0;
+  const jobsCompleted = sc?.JOBS_COMPLETED ?? sc?.JOB_COMPLETED ?? 0;
+
+  // Funnel stages with drop-off
+  const funnelStages = useMemo(() => {
+    const offered = jobsOffered || jobsClaimed + jobsUnclaimed;
+    const claimed = jobsClaimed;
+    const completed = jobsCompleted;
+    return [
+      { label: 'OFFERED', value: offered, color: '#5484d1', bg: '#335855' },
+      { label: 'CLAIMED', value: claimed, color: '#33bde0', bg: '#3F3B1D', drop: offered > 0 ? -Math.round(((offered - claimed) / offered) * 100) : 0 },
+      { label: 'COMPLETED', value: completed, color: '#67bd6d', bg: '#284F35', drop: claimed > 0 ? -Math.round(((claimed - completed) / claimed) * 100) : 0 },
+    ];
+  }, [jobsOffered, jobsClaimed, jobsUnclaimed, jobsCompleted]);
 
   // ── Chart data ──
   const rawChartData = useMemo(() => {
@@ -384,7 +346,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
     const header = 'Vendor,ID,Completed,Claimed,Rescheduled,First Time Fix';
     const rows = allDropdownVendors.map((v) => {
       const s = v.statusCounts;
-      return [`"${v.vendorName}"`, v.vendorId, s.JOB_COMPLETED, s.JOB_CLAIMED, s.JOB_RESCHEDULED, s.FIRST_TIME_FIX].join(',');
+      return [`"${v.vendorName}"`, v.vendorId, s.JOBS_COMPLETED ?? s.JOB_COMPLETED ?? 0, s.JOBS_CLAIMED ?? s.JOB_CLAIMED ?? 0, s.JOBS_RESCHEDULED ?? s.JOB_RESCHEDULED ?? 0, s.FIRST_TIME_FIX ?? 0].join(',');
     });
     downloadCsv(`kairos-vendor-breakdown_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
   }, [allDropdownVendors, downloadCsv]);
@@ -438,27 +400,53 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
       {/* ── Page header ── */}
       <div className="phead">
         <div>
-          <div className="phead-title">Job Board Dashboard</div>
+          <div className="phead-title">1099 Job Board — Operations Dashboard</div>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', marginTop: '4px', lineHeight: '1.4' }}>Tracks overflow demand offered to contracted 1099 providers, how much of it the network absorbs, and how well it's executed — end to end from offer to completion.</div>
         </div>
         <div className="flex items-center gap-3">
           <div className="daterange">
-            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--tx2)', marginRight: '4px' }}>Page</span>
-            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>From</span>
-            <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
-              {format(new Date(startDate + 'T00:00:00'), 'MMM dd, yyyy')}
-              <input ref={startDateRef} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </span>
-            <svg onClick={() => startDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
-              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>To</span>
-            <span className="dr-input" onClick={() => endDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
-              {format(new Date(endDate + 'T00:00:00'), 'MMM dd, yyyy')}
-              <input ref={endDateRef} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </span>
-            <svg onClick={() => endDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
-              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
+            <div className="viewtoggle" style={{ marginRight: '8px', gap: '4px' }}>
+              <button className={`pbtn ${dateMode === 'month' ? 'on' : ''}`} onClick={() => setDateMode('month')}>Month</button>
+              <button className={`pbtn ${dateMode === 'custom' ? 'on' : ''}`} onClick={() => setDateMode('custom')}>Custom</button>
+            </div>
+            {dateMode === 'month' ? (
+              <>
+                <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+                  {format(new Date(startDate + 'T00:00:00'), 'MMMM yyyy')}
+                  <input ref={startDateRef} type="month" value={startDate.slice(0, 7)} onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    const first = `${val}-01`;
+                    const lastDay = new Date(Number(val.split('-')[0]), Number(val.split('-')[1]), 0).getDate();
+                    const last = `${val}-${String(lastDay).padStart(2, '0')}`;
+                    setStartDate(first);
+                    setEndDate(last);
+                  }} />
+                </span>
+                <svg onClick={() => startDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>From</span>
+                <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+                  {format(new Date(startDate + 'T00:00:00'), 'MMM dd, yyyy')}
+                  <input ref={startDateRef} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                </span>
+                <svg onClick={() => startDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>To</span>
+                <span className="dr-input" onClick={() => endDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+                  {format(new Date(endDate + 'T00:00:00'), 'MMM dd, yyyy')}
+                  <input ref={endDateRef} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                </span>
+                <svg onClick={() => endDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </>
+            )}
           </div>
           <div className="freshness">
             <span className="freshness-dot" />
@@ -467,60 +455,153 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
         </div>
       </div>
 
-      {/* ── KPI Strip (7 cards) ── */}
-      <div className="kstrip">
-        {kpiCards.map((card) => (
-          <div
-            key={card.key}
-            className="kcard"
-            style={{ '--kc': card.kc, '--kc-rgb': card.kcRgb } as React.CSSProperties}
-          >
-            <div className="kcard-bg" />
-            <div className="kcard-block" />
-            <div className="kcard-body">
-              <div className="kcard-top">
-                <div className="kcard-label">
-                  {card.label}
-                  <span
-                    className="kpi-info-wrap"
-                    onMouseEnter={(e) => {
-                      const tip = e.currentTarget.querySelector('.kpi-info-tooltip') as HTMLElement;
-                      if (!tip) return;
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      tip.style.top = `${rect.bottom + 8}px`;
-                      tip.style.left = `${rect.left + rect.width / 2}px`;
-                      tip.style.transform = 'translateX(-50%)';
-                      tip.style.visibility = 'visible';
-                      tip.style.opacity = '1';
-                    }}
-                    onMouseLeave={(e) => {
-                      const tip = e.currentTarget.querySelector('.kpi-info-tooltip') as HTMLElement;
-                      if (tip) { tip.style.visibility = 'hidden'; tip.style.opacity = '0'; }
-                    }}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '4px', opacity: 0.5, verticalAlign: '-1px', cursor: 'help' }}>
-                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                    {card.tooltip && <span className="kpi-info-tooltip">{card.tooltip}</span>}
-                  </span>
-                </div>
-                <span className="kcard-icon">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={card.kc} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d={card.iconPath} />
-                  </svg>
-                </span>
-              </div>
-              <div className="kcard-val" style={{ marginTop: '8px' }}>{card.value}</div>
-              <div className="kcard-delta-row">
-              </div>
-              <div className="kcard-sub">{card.useDateRange === false ? card.sub : dateRangeLabel}</div>
+      {/* ── 01 Demand Funnel ── */}
+      <div style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginBottom: '4px' }}>01</div>
+        <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700, color: 'var(--tx1)', marginBottom: '12px' }}>Demand Funnel</div>
+
+        {/* KPI Cards Row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+          {/* Jobs Offered */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>JOBS OFFERED</div>
+              <span style={{ background: 'rgba(84,132,209,0.15)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5484d1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+              </span>
             </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--tx1)', marginTop: '8px' }}>{fmt(jobsOffered || (jobsClaimed + jobsUnclaimed) || undefined)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Total service jobs offered to the 1099 network · {dateRangeLabel}</div>
           </div>
-        ))}
+
+          {/* Claim Rate */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>CLAIM RATE</div>
+              <span style={{ background: 'rgba(236,72,153,0.15)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#ec4899', marginTop: '8px' }}>{claimRate ? `${claimRate}%` : '—'}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Percentage of offered jobs claimed by technicians</div>
+          </div>
+
+          {/* Unclaimed / Expired */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>UNCLAIMED / EXPIRED</div>
+              <span style={{ background: 'rgba(99,102,241,0.15)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="9" x2="15" y2="15" /><line x1="15" y1="9" x2="9" y2="15" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--tx1)', marginTop: '8px' }}>{fmt(jobsUnclaimed || undefined)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Jobs never claimed before they expired or closed</div>
+          </div>
+
+        </div>
+
+        {/* Funnel Visualization — Horizontal Bars */}
+        <div className="card-kairos" style={{ padding: '18px 24px' }}>
+          <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--tx1)', marginBottom: '4px' }}>Offer → Completion Drop-off</div>
+          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginBottom: '24px' }}>Where jobs are lost in the pipeline, by stage</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', height: '180px', gap: '0' }}>
+            {funnelStages.map((stage, i) => {
+              const maxVal = Math.max(...funnelStages.map(s => s.value), 1);
+              const heightPct = Math.max(Math.round((stage.value / maxVal) * 100), 20);
+              return (
+                <Fragment key={stage.label}>
+                  {/* Drop-off connector */}
+                  {i > 0 && 'drop' in stage && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minWidth: '52px', padding: '0 2px', paddingBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--tx3)', marginBottom: '2px' }}>→</span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#f87171' }}>{stage.drop}%</span>
+                    </div>
+                  )}
+                  {/* Bar + label column */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+                    {/* Value above bar */}
+                    <div style={{ fontSize: '19px', fontWeight: 600, color: 'var(--tx1)', fontFamily: 'var(--font-mono, monospace)', marginBottom: '6px' }}>{stage.value.toLocaleString()}</div>
+                    {/* Bar */}
+                    <div style={{
+                      width: '100%',
+                      height: `${heightPct}%`,
+                      borderRadius: '8px 8px 0 0',
+                      background: stage.bg,
+                      border: `1px solid ${stage.color}30`,
+                      borderBottom: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: stage.color, opacity: 0.85 }}>{stage.label}</div>
+                    </div>
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* ── Job Status Trend ── */}
-      <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
+      {/* ── 02 Execution & Quality ── */}
+      <div style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginBottom: '4px' }}>02</div>
+        <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700, color: 'var(--tx1)', marginBottom: '12px' }}>Execution &amp; Quality</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          {/* In Progress */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>IN PROGRESS</div>
+              <span style={{ background: 'rgba(251,191,36,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#fbbf24', marginTop: '8px' }}>{fmt(sc?.JOBS_INPROGRESS ?? sc?.JOB_IN_PROGRESS)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Claimed jobs where work has started but is not yet completed</div>
+          </div>
+
+          {/* First Time Fix */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>FIRST TIME FIX</div>
+              <span style={{ background: 'rgba(53,212,199,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#35d4c7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#35d4c7', marginTop: '8px' }}>{fmt(sc?.FIRST_TIME_FIX)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Completed jobs resolved in the first visit without rescheduling</div>
+          </div>
+
+          {/* Completed */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>COMPLETED</div>
+              <span style={{ background: 'rgba(74,222,128,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#4ade80', marginTop: '8px' }}>{fmt(sc?.JOBS_COMPLETED ?? sc?.JOB_COMPLETED)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Service jobs successfully completed by technicians</div>
+          </div>
+
+          {/* Rescheduled */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>RESCHEDULED</div>
+              <span style={{ background: 'rgba(248,113,113,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#f87171', marginTop: '8px' }}>{fmt(sc?.JOBS_RESCHEDULED ?? sc?.JOB_RESCHEDULED)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Jobs moved to a different appointment date after being assigned</div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Job Status Trend (hidden for now) ── */}
+      {false && <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
         <div style={{ padding: '0 18px', paddingTop: '16px', marginBottom: '14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -735,218 +816,113 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
-      {/* ── Vendor Job Breakdown ── */}
-      <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
-        <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>Vendor Job Breakdown</div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>
-              {selectedVendor?.name ? `Highlighting ${selectedVendor.name} · ` : ''}{fmtDate(startDate)} – {fmtDate(endDate)}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="card-search">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tx3)' }}>
-                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                placeholder="Search vendor…"
-                value={vbdSearch}
-                onChange={(e) => { setVbdSearch(e.target.value); setVbdPage(1); }}
-                style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
-              />
-            </div>
-            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportVbdCsv}>↓ CSV</button>
-          </div>
-        </div>
+      {/* ── 03 Vendor Breakdown ── */}
+      <div style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginBottom: '4px' }}>03</div>
+        <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700, color: 'var(--tx1)', marginBottom: '12px' }}>Vendor Breakdown</div>
 
-        {/* Summary bar */}
-        {filteredByVendor.length > 0 && (
-          <div className="vbd-summary">
-            <div className="vbd-stat">
-              <div className="vbd-stat-l">Vendors</div>
-              <div className="vbd-stat-v">{selectedVendor ? 1 : fmt(vbdTotals?.totalVendors)}</div>
+        <div className="card-kairos">
+          <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>Per-Vendor Performance</div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>{fmtDate(startDate)} – {fmtDate(endDate)} · {fmt(vbdTotals?.totalVendors)} vendors</div>
             </div>
-            <div className="vbd-stat">
-              <div className="vbd-stat-l">Completed</div>
-              <div className="vbd-stat-v" style={{ color: 'var(--green)' }}>{fmt(svCounts ? svCounts.JOB_COMPLETED : vbdTotals?.JOB_COMPLETED)}</div>
-            </div>
-            <div className="vbd-stat">
-              <div className="vbd-stat-l">Claimed</div>
-              <div className="vbd-stat-v" style={{ color: '#5484d1' }}>{fmt(svCounts ? svCounts.JOB_CLAIMED : vbdTotals?.JOB_CLAIMED)}</div>
-            </div>
-            <div className="vbd-stat">
-              <div className="vbd-stat-l">Rescheduled</div>
-              <div className="vbd-stat-v" style={{ color: '#D95459' }}>{fmt(svCounts ? svCounts.JOB_RESCHEDULED : vbdTotals?.JOB_RESCHEDULED)}</div>
-            </div>
-            <div className="vbd-stat">
-              <div className="vbd-stat-l">First Time Fix</div>
-              <div className="vbd-stat-v">{fmt(svCounts ? svCounts.FIRST_TIME_FIX : vbdTotals?.FIRST_TIME_FIX)}</div>
-            </div>
-          </div>
-        )}
-
-        <div className="card-scroll-wrap" style={{ maxHeight: '420px' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th style={{ width: '28px' }}>#</th>
-                <th>Vendor</th>
-                <th style={{ textAlign: 'right', width: '100px' }}>Completed</th>
-                <th style={{ textAlign: 'right', width: '90px' }}>Claimed</th>
-                <th style={{ textAlign: 'right', width: '108px' }}>Rescheduled</th>
-                <th style={{ textAlign: 'right', width: '112px' }}>First Time Fix</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vbdQ.isLoading ? (
-                <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
-              ) : filteredByVendor.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: '40px 24px', textAlign: 'center' }}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
-                      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <p style={{ fontSize: 'var(--fs-md)', color: 'var(--tx2)', fontWeight: 500, marginBottom: '4px' }}>No results found</p>
-                    <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search or widen the date window</p>
-                  </td></tr>
-              ) : (
-                (isSearching ? filteredByVendor.slice((vbdPage - 1) * 20, vbdPage * 20) : filteredByVendor).map((v, i) => {
-                  const s = v.statusCounts;
-                  const isHighlighted = selectedVendor?.id === v.vendorId;
-                  const selTdStyle = isHighlighted ? { background: 'var(--blue-l-bg)', boxShadow: 'inset 3px 0 0 var(--blue)' } : {};
-                  const rank = (vbdPage - 1) * 20 + i + 1;
-                  return (
-                    <tr
-                      key={v.vendorId}
-                      onClick={() => setSelectedVendor({ id: v.vendorId, name: v.vendorName })}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td className="font-mono" style={{ ...selTdStyle, color: isHighlighted ? 'var(--blue)' : 'var(--tx3)', fontSize: 'var(--fs-xs)', fontWeight: isHighlighted ? 700 : undefined }}>{isHighlighted ? '▸' : rank}</td>
-                      <td style={selTdStyle}>
-                        <div style={{ fontSize: 'var(--fs-base)', fontWeight: isHighlighted ? 600 : 500, color: isHighlighted ? 'var(--blue)' : 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>
-                        <div className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>ID: {v.vendorId}</div>
-                      </td>
-                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{s.JOB_COMPLETED.toLocaleString()}</td>
-                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{s.JOB_CLAIMED.toLocaleString()}</td>
-                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{s.JOB_RESCHEDULED.toLocaleString()}</td>
-                      <td className="font-mono" style={{ ...selTdStyle, textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{s.FIRST_TIME_FIX.toLocaleString()}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {((isSearching && filteredByVendor.length > 0) || (vbdPagination && vbdPagination.totalPages > 0)) && (() => {
-          const total = isSearching ? filteredByVendor.length : (vbdPagination?.total ?? 0);
-          const totalPages = isSearching ? Math.ceil(total / 20) : (vbdPagination?.totalPages ?? 0);
-          const from = (vbdPage - 1) * 20 + 1;
-          const to = Math.min(vbdPage * 20, total);
-          const pages: number[] = [];
-          [1, 2, vbdPage - 1, vbdPage, vbdPage + 1, totalPages - 1, totalPages].forEach((n) => {
-            if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n);
-          });
-          pages.sort((a, b) => a - b);
-          return (
-            <div className="pgbar">
-              <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>
-                Showing <strong style={{ color: 'var(--tx1)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--tx1)' }}>{total}</strong> vendors
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <button className="pgbtn" disabled={vbdPage <= 1} onClick={() => setVbdPage(vbdPage - 1)}>‹ Prev</button>
-                {pages.map((n, idx) => (
-                  <span key={n}>
-                    {idx > 0 && n - pages[idx - 1] > 1 && <span style={{ color: 'var(--tx3)', padding: '0 2px' }}>…</span>}
-                    <button className={`pgbtn ${n === vbdPage ? 'on' : ''}`} onClick={() => setVbdPage(n)}>{n}</button>
-                  </span>
-                ))}
-                <button className="pgbtn" disabled={vbdPage >= totalPages} onClick={() => setVbdPage(vbdPage + 1)}>Next ›</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="card-search">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tx3)' }}>
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  placeholder="Search vendor…"
+                  value={vbdSearch}
+                  onChange={(e) => { setVbdSearch(e.target.value); setVbdPage(1); }}
+                  style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
+                />
               </div>
+              <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportVbdCsv}>↓ CSV</button>
             </div>
-          );
-        })()}
-      </div>
+          </div>
 
-      {/* ── Vendors section label ── */}
-      <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 'var(--ls-wider)', color: 'var(--tx3)', marginBottom: '8px' }}>Vendors</div>
+          <div className="card-scroll-wrap" style={{ maxHeight: '480px' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: '28px' }}>#</th>
+                  <th>Vendor</th>
+                  <th style={{ textAlign: 'right', width: '90px' }}>Completed</th>
+                  <th style={{ textAlign: 'right', width: '80px' }}>Claimed</th>
+                  <th style={{ textAlign: 'right', width: '100px' }}>In Progress</th>
+                  <th style={{ textAlign: 'right', width: '100px' }}>Rescheduled</th>
+                  <th style={{ textAlign: 'right', width: '100px' }}>First Time Fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vbdQ.isLoading ? (
+                  <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+                ) : filteredByVendor.length === 0 ? (
+                  <tr><td colSpan={7} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
+                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <p style={{ fontSize: 'var(--fs-md)', color: 'var(--tx2)', fontWeight: 500, marginBottom: '4px' }}>No results found</p>
+                      <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search or widen the date window</p>
+                    </td></tr>
+                ) : (
+                  (isSearching ? filteredByVendor.slice((vbdPage - 1) * 20, vbdPage * 20) : filteredByVendor).map((v, i) => {
+                    const s = v.statusCounts;
+                    const rank = (vbdPage - 1) * 20 + i + 1;
+                    return (
+                      <tr key={v.vendorId}>
+                        <td className="font-mono" style={{ color: 'var(--tx3)', fontSize: 'var(--fs-xs)' }}>{rank}</td>
+                        <td>
+                          <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600, color: 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>
+                          <div className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>ID: {v.vendorId}</div>
+                        </td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{(s.JOBS_COMPLETED ?? s.JOB_COMPLETED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{(s.JOBS_CLAIMED ?? s.JOB_CLAIMED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#fbbf24', fontWeight: 600 }}>{(s.JOBS_INPROGRESS ?? s.JOB_IN_PROGRESS ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{(s.JOBS_RESCHEDULED ?? s.JOB_RESCHEDULED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{(s.FIRST_TIME_FIX ?? 0).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
-      {/* ── All Vendors ── */}
-      <div className="card-kairos" style={{ marginBottom: 'var(--sp-4)' }}>
-        <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>All Vendors</div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>{vendors.length ? `${vendors.length.toLocaleString()} total` : '—'}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="card-search">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tx3)' }}>
-                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                placeholder="Search…"
-                value={vendorSearch}
-                onChange={(e) => setVendorSearch(e.target.value)}
-                style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
-              />
-            </div>
-            <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportVendorsCsv}>↓ CSV</button>
-          </div>
+          {/* Pagination */}
+          {((isSearching && filteredByVendor.length > 0) || (vbdPagination && vbdPagination.totalPages > 0)) && (() => {
+            const total = isSearching ? filteredByVendor.length : (vbdPagination?.total ?? 0);
+            const totalPages = isSearching ? Math.ceil(total / 20) : (vbdPagination?.totalPages ?? 0);
+            const from = (vbdPage - 1) * 20 + 1;
+            const to = Math.min(vbdPage * 20, total);
+            const pages: number[] = [];
+            [1, 2, vbdPage - 1, vbdPage, vbdPage + 1, totalPages - 1, totalPages].forEach((n) => {
+              if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n);
+            });
+            pages.sort((a, b) => a - b);
+            return (
+              <div className="pgbar">
+                <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>
+                  Showing <strong style={{ color: 'var(--tx1)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--tx1)' }}>{total}</strong> vendors
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button className="pgbtn" disabled={vbdPage <= 1} onClick={() => setVbdPage(vbdPage - 1)}>‹ Prev</button>
+                  {pages.map((n, idx) => (
+                    <span key={n}>
+                      {idx > 0 && n - pages[idx - 1] > 1 && <span style={{ color: 'var(--tx3)', padding: '0 2px' }}>…</span>}
+                      <button className={`pgbtn ${n === vbdPage ? 'on' : ''}`} onClick={() => setVbdPage(n)}>{n}</button>
+                    </span>
+                  ))}
+                  <button className="pgbtn" disabled={vbdPage >= totalPages} onClick={() => setVbdPage(vbdPage + 1)}>Next ›</button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
-        <div className="card-scroll-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th style={{ width: '36px' }}>ID</th>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Last Login</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vendorsQ.isLoading ? (
-                <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
-              ) : allVendorsFiltered.length === 0 ? (
-                <tr><td colSpan={4} style={{ padding: '40px 24px', textAlign: 'center' }}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
-                      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <p style={{ fontSize: 'var(--fs-md)', color: 'var(--tx2)', fontWeight: 500, marginBottom: '4px' }}>No results found</p>
-                    <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search</p>
-                  </td></tr>
-              ) : (
-                vendorsPageSlice.map((v) => (
-                  <tr key={v.id} onClick={() => setSelectedVendor({ id: v.id, name: v.name })}>
-                    <td className="font-mono" style={{ color: 'var(--tx3)' }}>{v.id}</td>
-                    <td style={{ fontSize: 'var(--fs-base)', fontWeight: 500, color: 'var(--tx1)' }}>{v.name.length > 28 ? v.name.slice(0, 28) + '…' : v.name}</td>
-                    <td className="font-mono" style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx2)' }}>{v.username}</td>
-                    <td style={{ fontSize: 'var(--fs-sm)', color: v.lastLoginAt ? 'var(--tx1)' : 'var(--tx3)' }}>
-                      {v.lastLoginAt ? format(new Date(v.lastLoginAt), 'MMM dd, yyyy') : '—'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        {vendorTotalPages > 1 && (
-          <div className="pgbar">
-            <span style={{ color: 'var(--tx3)' }}>
-              Showing <strong style={{ color: 'var(--tx1)' }}>{(vendorPage - 1) * 20 + 1}–{Math.min(vendorPage * 20, allVendorsFiltered.length)}</strong> of <strong style={{ color: 'var(--tx1)' }}>{allVendorsFiltered.length.toLocaleString()}</strong> vendors
-            </span>
-            <div style={{ flex: 1 }} />
-            <button className="pgbtn" disabled={vendorPage <= 1} onClick={() => setVendorPage(vendorPage - 1)}>‹ Prev</button>
-            <button className="pgbtn on">{vendorPage}</button>
-            {vendorPage + 1 <= vendorTotalPages && <button className="pgbtn" onClick={() => setVendorPage(vendorPage + 1)}>{vendorPage + 1}</button>}
-            {vendorPage + 2 <= vendorTotalPages && <button className="pgbtn" onClick={() => setVendorPage(vendorPage + 2)}>{vendorPage + 2}</button>}
-            {vendorTotalPages > vendorPage + 2 && <span style={{ padding: '0 6px', color: 'var(--tx3)' }}>…</span>}
-            {vendorTotalPages > vendorPage + 2 && <button className="pgbtn" onClick={() => setVendorPage(vendorTotalPages)}>{vendorTotalPages}</button>}
-            <button className="pgbtn" disabled={vendorPage >= vendorTotalPages} onClick={() => setVendorPage(vendorPage + 1)}>Next ›</button>
-          </div>
-        )}
       </div>
 
 

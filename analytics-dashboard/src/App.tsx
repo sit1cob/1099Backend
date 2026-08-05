@@ -114,11 +114,10 @@ function App() {
   return (
     <ThemeProvider>
     <div className="min-h-screen flex" style={{ background: 'var(--app-bg)', color: 'var(--tx1)' }}>
-      {/* Sidebar */}
-      <Sidebar activeItem={activePage} onNavigate={setActivePage} feedbackCount={feedbackCount} />
+      {/* Sidebar — hidden */}
 
       {/* Main content */}
-      <div className="flex-1 ml-[236px] flex flex-col" style={{ minHeight: '100vh' }}>
+      <div className="flex-1 flex flex-col" style={{ minHeight: '100vh' }}>
         <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onNavigate={setActivePage} />
         <main className="flex-1 p-6 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
           {activePage === 'Overview' && <OverviewPage onNavigate={setActivePage} initialStartDate={settings.startDate} initialEndDate={settings.endDate} />}
