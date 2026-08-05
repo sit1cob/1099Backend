@@ -204,6 +204,31 @@ export async function fetchVendorStatusRange(params: {
   return data;
 }
 
+// Fetch ALL vendors by fetching all pages in parallel
+export async function fetchAllVendorStatusRange(params: {
+  startDate: string;
+  endDate: string;
+}): Promise<VendorStatusRow[]> {
+  // First fetch to get total pages
+  const firstPage = await fetchVendorStatusRange({ ...params, page: 1, limit: 100 });
+  const totalPages = firstPage.data?.pagination?.totalPages ?? 1;
+  const allVendors: VendorStatusRow[] = [...(firstPage.data?.data ?? [])];
+  
+  if (totalPages > 1) {
+    // Fetch remaining pages in parallel
+    const pagePromises = [];
+    for (let page = 2; page <= totalPages; page++) {
+      pagePromises.push(fetchVendorStatusRange({ ...params, page, limit: 100 }));
+    }
+    const results = await Promise.all(pagePromises);
+    for (const result of results) {
+      allVendors.push(...(result.data?.data ?? []));
+    }
+  }
+  
+  return allVendors;
+}
+
 export async function fetchVendorJobs(vendorId: number): Promise<VendorJobsResponse> {
   const { data } = await apiClient.get<VendorJobsResponse>(
     `/api/dashboard/vendors/${vendorId}/jobs`,

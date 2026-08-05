@@ -15,6 +15,7 @@ import {
   fetchStatusCounts,
   fetchStatusTimeSeries,
   fetchVendorStatusRange,
+  fetchAllVendorStatusRange,
 } from '../../services/dashboardApi';
 import type {
   TimeSeriesPoint,
@@ -172,7 +173,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   const allVendorsForDropdownQ = useQuery({
     queryKey: ['dash-vbd-all', startDate, endDate],
-    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: 1, limit: 500 }),
+    queryFn: () => fetchAllVendorStatusRange({ startDate, endDate }),
     staleTime: 120000,
   });
 
@@ -339,7 +340,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const vbdRows: VendorStatusRow[] = vbdQ.data?.data?.data ?? [];
   const vbdPagination = vbdQ.data?.data?.pagination;
   const completedByVendor: CompletedVendor[] = completedQ.data?.data?.byVendor ?? [];
-  const allDropdownVendors: VendorStatusRow[] = allVendorsForDropdownQ.data?.data?.data ?? [];
+  const allDropdownVendors: VendorStatusRow[] = allVendorsForDropdownQ.data ?? [];
 
   const exportVbdCsv = useCallback(() => {
     if (!allDropdownVendors.length) return;
@@ -363,6 +364,8 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   const isSearching = !!vbdSearch.trim();
   const filteredByVendor = useMemo(() => {
+    // When searching, filter ALL vendors client-side (allDropdownVendors has up to 5000)
+    // When not searching, use paginated API response
     let list = isSearching
       ? allDropdownVendors.filter((v) =>
           v.vendorName.toLowerCase().includes(vbdSearch.toLowerCase()) ||
@@ -486,16 +489,16 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
             <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Percentage of offered jobs claimed by technicians</div>
           </div>
 
-          {/* Unclaimed / Expired */}
+          {/* Unclaimed */}
           <div className="card-kairos" style={{ padding: '16px 18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>UNCLAIMED / EXPIRED</div>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>UNCLAIMED</div>
               <span style={{ background: 'rgba(99,102,241,0.15)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="9" x2="15" y2="15" /><line x1="15" y1="9" x2="9" y2="15" /></svg>
               </span>
             </div>
             <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--tx1)', marginTop: '8px' }}>{fmt(jobsUnclaimed || undefined)}</div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Jobs never claimed before they expired or closed</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Jobs never claimed by technicians</div>
           </div>
 
         </div>
