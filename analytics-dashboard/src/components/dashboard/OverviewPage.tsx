@@ -16,6 +16,7 @@ import {
   fetchStatusTimeSeries,
   fetchVendorStatusRange,
   fetchAllVendorStatusRange,
+  fetchOrderTiming,
 } from '../../services/dashboardApi';
 import type {
   TimeSeriesPoint,
@@ -183,8 +184,15 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
     staleTime: 60000,
   });
 
+  const orderTimingQ = useQuery({
+    queryKey: ['dash-order-timing'],
+    queryFn: fetchOrderTiming,
+    staleTime: 60000,
+  });
+
   // ── Derived ──
   const sc = statusQ.data?.data;
+  const otData = orderTimingQ.data?.data;
   const vbdTotals = vbdQ.data?.data?.totals;
 
   // Demand Funnel metrics (mapped to API fields: JOBS_OFFERED, CLAIM_RATE, JOBS_UNCLAIMED, JOBS_CLAIMED, JOBS_COMPLETED)
@@ -344,10 +352,10 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   const exportVbdCsv = useCallback(() => {
     if (!allDropdownVendors.length) return;
-    const header = 'Vendor,ID,Completed,Claimed,Rescheduled,First Time Fix';
+    const header = 'Vendor,ID,Completed,Claimed,Rescheduled,Parts Ordered,First Time Fix';
     const rows = allDropdownVendors.map((v) => {
       const s = v.statusCounts;
-      return [`"${v.vendorName}"`, v.vendorId, s.JOBS_COMPLETED ?? s.JOB_COMPLETED ?? 0, s.JOBS_CLAIMED ?? s.JOB_CLAIMED ?? 0, s.JOBS_RESCHEDULED ?? s.JOB_RESCHEDULED ?? 0, s.FIRST_TIME_FIX ?? 0].join(',');
+      return [`"${v.vendorName}"`, v.vendorId, s.JOBS_COMPLETED ?? s.JOB_COMPLETED ?? 0, s.JOBS_CLAIMED ?? s.JOB_CLAIMED ?? 0, s.JOBS_RESCHEDULED ?? s.JOB_RESCHEDULED ?? 0, s.PARTS_ORDERED ?? s.PART_ORDER_SUBMITTED ?? 0, s.FIRST_TIME_FIX ?? 0].join(',');
     });
     downloadCsv(`kairos-vendor-breakdown_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
   }, [allDropdownVendors, downloadCsv]);
@@ -600,6 +608,50 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
             <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Jobs moved to a different appointment date after being assigned</div>
           </div>
 
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '12px' }}>
+          {/* Parts Ordered */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>PARTS ORDERED</div>
+              <span style={{ background: 'rgba(139,92,246,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" /><path d="M16 3H8L4 7h16l-4-4z" /></svg>
+              </span>
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#a78bfa', marginTop: '8px' }}>{fmt(sc?.PARTS_ORDERED)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Across {fmt(jobsCompleted)} completed jobs this window</div>
+          </div>
+
+          {/* Avg Age of Open Orders */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>AVG AGE OF OPEN ORDERS</div>
+              <span style={{ background: 'rgba(251,191,36,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
+              </span>
+            </div>
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+              <span style={{ fontSize: '28px', fontWeight: 700, color: '#35d4c7' }}>{otData ? otData.AGE_ON_OPEN_ORDERS.avgAgeDays.toFixed(1) : '—'}</span>
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#35d4c7' }}>days</span>
+            </div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Today minus created date, across all open (claimed, not yet completed/cancelled) jobs</div>
+          </div>
+
+          {/* Cycle Time */}
+          <div className="card-kairos" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>CYCLE TIME</div>
+              <span style={{ background: 'rgba(53,212,199,0.12)', borderRadius: '6px', padding: '4px', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#35d4c7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+              </span>
+            </div>
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+              <span style={{ fontSize: '28px', fontWeight: 700, color: '#35d4c7' }}>{otData ? otData.CYCLE_TIME.avgCycleTimeDays.toFixed(1) : '—'}</span>
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#35d4c7' }}>days</span>
+            </div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '4px' }}>Completed date minus created date, avg across {fmt(otData?.CYCLE_TIME.numberOfCompletedOrders)} completed jobs this window</div>
+          </div>
         </div>
       </div>
 
@@ -858,14 +910,15 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                   <th style={{ textAlign: 'right', width: '80px' }}>Claimed</th>
                   <th style={{ textAlign: 'right', width: '100px' }}>In Progress</th>
                   <th style={{ textAlign: 'right', width: '100px' }}>Rescheduled</th>
+                  <th style={{ textAlign: 'right', width: '110px' }}>Parts Ordered</th>
                   <th style={{ textAlign: 'right', width: '100px' }}>First Time Fix</th>
                 </tr>
               </thead>
               <tbody>
                 {vbdQ.isLoading ? (
-                  <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+                  <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
                 ) : filteredByVendor.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                  <tr><td colSpan={8} style={{ padding: '40px 24px', textAlign: 'center' }}>
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
                         <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                       </svg>
@@ -887,6 +940,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                         <td className="font-mono" style={{ textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{(s.JOBS_CLAIMED ?? s.JOB_CLAIMED ?? 0).toLocaleString()}</td>
                         <td className="font-mono" style={{ textAlign: 'right', color: '#fbbf24', fontWeight: 600 }}>{(s.JOBS_INPROGRESS ?? s.JOB_IN_PROGRESS ?? 0).toLocaleString()}</td>
                         <td className="font-mono" style={{ textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{(s.JOBS_RESCHEDULED ?? s.JOB_RESCHEDULED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#a78bfa', fontWeight: 600 }}>{(s.PARTS_ORDERED ?? s.PART_ORDER_SUBMITTED ?? 0).toLocaleString()}</td>
                         <td className="font-mono" style={{ textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{(s.FIRST_TIME_FIX ?? 0).toLocaleString()}</td>
                       </tr>
                     );

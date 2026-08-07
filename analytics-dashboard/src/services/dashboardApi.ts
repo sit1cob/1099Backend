@@ -72,6 +72,7 @@ export type StatusCounts = {
   JOBS_COMPLETED?: number;
   JOBS_INPROGRESS?: number;
   JOBS_RESCHEDULED?: number;
+  PARTS_ORDERED?: number;
 };
 
 export type VendorStatusRow = {
@@ -83,6 +84,7 @@ export type VendorStatusRow = {
     JOB_COMPLETED?: number;
     JOB_RESCHEDULED?: number;
     PART_ORDER_SUBMITTED?: number;
+    PARTS_ORDERED?: number;
     FIRST_TIME_FIX?: number;
     JOBS_CLAIMED?: number;
     JOBS_COMPLETED?: number;
@@ -121,6 +123,21 @@ export type VendorStatusRangeResponse = {
 export type StatusCountsResponse = {
   success: boolean;
   data: StatusCounts;
+  message: string;
+};
+
+export type OrderTimingResponse = {
+  success: boolean;
+  data: {
+    AGE_ON_OPEN_ORDERS: {
+      avgAgeDays: number;
+      numberOfOpenOrders: number;
+    };
+    CYCLE_TIME: {
+      avgCycleTimeDays: number;
+      numberOfCompletedOrders: number;
+    };
+  };
   message: string;
 };
 
@@ -179,6 +196,11 @@ export async function fetchStatusCounts(params: {
   const { data } = await apiClient.get<StatusCountsResponse>('/api/dashboard/jobs/status-counts', {
     params,
   });
+  return data;
+}
+
+export async function fetchOrderTiming(): Promise<OrderTimingResponse> {
+  const { data } = await apiClient.get<OrderTimingResponse>('/api/dashboard/jobs/order-timing');
   return data;
 }
 
