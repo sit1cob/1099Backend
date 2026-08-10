@@ -17,12 +17,14 @@ import {
   fetchVendorStatusRange,
   fetchAllVendorStatusRange,
   fetchOrderTiming,
+  fetchGeoHierarchy,
 } from '../../services/dashboardApi';
 import type {
   TimeSeriesPoint,
   CompletedVendor,
   VendorStatusRow,
   Vendor,
+  GeoHierarchyDistrict,
 } from '../../services/dashboardApi';
 
 // ─── KPI Card Config ─────────────────────────────────────────────────
@@ -50,6 +52,17 @@ const LINE_SERIES = [
 type TrendRange = 'page' | '7d' | '30d' | '12m' | 'custom';
 type TrendView = 'chart' | 'table';
 type TrendGroupBy = 'day' | 'week' | 'month';
+type DatePreset = 'today' | 'wtd' | 'mtd' | 'last-week' | 'last-month' | 'qtd' | 'custom';
+
+const DATE_PRESET_LABELS: Record<DatePreset, string> = {
+  today: 'Today',
+  wtd: 'Week to Date',
+  mtd: 'Month to Date',
+  'last-week': 'Last Week',
+  'last-month': 'Last Month',
+  qtd: 'Quarter to Date',
+  custom: 'Custom Range',
+};
 
 // ─── Fmt helper ──────────────────────────────────────────────────────
 const fmt = (n: number | undefined) => n?.toLocaleString() ?? '—';
@@ -64,10 +77,13 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const [endDate, setEndDate] = useState(() => {
     if (initialEndDate) return initialEndDate;
     const now = new Date();
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
   const [dateMode, setDateMode] = useState<'month' | 'custom'>('month');
+  const [datePreset, setDatePreset] = useState<DatePreset>(() => {
+    if (initialStartDate || initialEndDate) return 'custom';
+    return 'mtd';
+  });
   const [trendRange, setTrendRange] = useState<TrendRange>('page');
   const [trendView, setTrendView] = useState<TrendView>('chart');
   const [trendGroupBy, setTrendGroupBy] = useState<TrendGroupBy>('day');
@@ -80,6 +96,10 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const [vendorDropdownSearch, setVendorDropdownSearch] = useState('');
   const [trendFrom, setTrendFrom] = useState('2026-05-16');
   const [trendTo, setTrendTo] = useState('2026-06-12');
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
+  const [selectedPlanningArea, setSelectedPlanningArea] = useState<string>('');
+  const [appliedDistrict, setAppliedDistrict] = useState<string>('');
+  const [appliedPlanningArea, setAppliedPlanningArea] = useState<string>('');
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
   const startDateRef = useRef<HTMLInputElement>(null);
   const endDateRef = useRef<HTMLInputElement>(null);
@@ -104,7 +124,12 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [vendorDropdownOpen]);
 
-  const dateParams = { startDate, endDate };
+  const geoParams = useMemo(() => ({
+    ...(appliedDistrict ? { district: appliedDistrict } : {}),
+    ...(appliedPlanningArea ? { planningArea: appliedPlanningArea } : {}),
+  }), [appliedDistrict, appliedPlanningArea]);
+
+  const dateParams = { startDate, endDate, ...geoParams };
   const trendPeriod = trendRange === '7d' ? 'week' as const : trendRange === '12m' ? 'year' as const : 'month' as const;
 
   // Which granularities are valid for the active range
@@ -148,14 +173,14 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   // ── Data queries ──
 
   const statusQ = useQuery({
-    queryKey: ['dash-status', startDate, endDate],
+    queryKey: ['dash-status', startDate, endDate, appliedDistrict, appliedPlanningArea],
     queryFn: () => fetchStatusCounts(dateParams),
     staleTime: 30000,
     refetchInterval: 30000,
   });
 
   const completedQ = useQuery({
-    queryKey: ['dash-completed', startDate, endDate],
+    queryKey: ['dash-completed', startDate, endDate, appliedDistrict, appliedPlanningArea],
     queryFn: () => fetchCompletedJobs(dateParams),
     staleTime: 60000,
   });
@@ -173,22 +198,83 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   });
 
   const allVendorsForDropdownQ = useQuery({
-    queryKey: ['dash-vbd-all', startDate, endDate],
-    queryFn: () => fetchAllVendorStatusRange({ startDate, endDate }),
+    queryKey: ['dash-vbd-all', startDate, endDate, appliedDistrict, appliedPlanningArea],
+    queryFn: () => fetchAllVendorStatusRange({ startDate, endDate, ...geoParams }),
     staleTime: 120000,
   });
 
   const vbdQ = useQuery({
-    queryKey: ['dash-vbd', startDate, endDate, vbdPage, vbdSearch],
-    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: vbdPage, limit: 20, search: vbdSearch || undefined }),
+    queryKey: ['dash-vbd', startDate, endDate, vbdPage, vbdSearch, appliedDistrict, appliedPlanningArea],
+    queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: vbdPage, limit: 20, search: vbdSearch || undefined, ...geoParams }),
     staleTime: 60000,
   });
 
   const orderTimingQ = useQuery({
-    queryKey: ['dash-order-timing'],
-    queryFn: fetchOrderTiming,
+    queryKey: ['dash-order-timing', appliedDistrict, appliedPlanningArea],
+    queryFn: () => fetchOrderTiming(geoParams),
     staleTime: 60000,
   });
+
+  const geoQ = useQuery({
+    queryKey: ['dash-geo-hierarchy'],
+    queryFn: fetchGeoHierarchy,
+    staleTime: Infinity,
+  });
+
+  // ── Geo hierarchy derived ──
+  const geoDistricts: GeoHierarchyDistrict[] = geoQ.data?.data?.districts ?? [];
+  const availablePlanningAreas = useMemo(() => {
+    if (!selectedDistrict) return geoDistricts.flatMap((d) => d.planningAreas);
+    return geoDistricts.find((d) => d.districtName === selectedDistrict)?.planningAreas ?? [];
+  }, [geoDistricts, selectedDistrict]);
+
+  const handleApplyFilters = () => {
+    setAppliedDistrict(selectedDistrict);
+    setAppliedPlanningArea(selectedPlanningArea);
+    setVbdPage(1);
+  };
+
+  const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const applyPreset = useCallback((preset: DatePreset) => {
+    const now = new Date();
+    const today = toDateStr(now);
+    setDatePreset(preset);
+    if (preset === 'today') {
+      setStartDate(today); setEndDate(today);
+    } else if (preset === 'wtd') {
+      const dow = now.getDay(); const diff = dow === 0 ? 6 : dow - 1;
+      const mon = new Date(now); mon.setDate(now.getDate() - diff);
+      setStartDate(toDateStr(mon)); setEndDate(today);
+    } else if (preset === 'mtd') {
+      setStartDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
+      setEndDate(today);
+    } else if (preset === 'last-week') {
+      const dow = now.getDay(); const diff = dow === 0 ? 6 : dow - 1;
+      const lastMon = new Date(now); lastMon.setDate(now.getDate() - diff - 7);
+      const lastSun = new Date(lastMon); lastSun.setDate(lastMon.getDate() + 6);
+      setStartDate(toDateStr(lastMon)); setEndDate(toDateStr(lastSun));
+    } else if (preset === 'last-month') {
+      const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lmEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+      setStartDate(toDateStr(lm)); setEndDate(toDateStr(lmEnd));
+    } else if (preset === 'qtd') {
+      const q = Math.floor(now.getMonth() / 3);
+      const qStart = new Date(now.getFullYear(), q * 3, 1);
+      setStartDate(toDateStr(qStart)); setEndDate(today);
+    }
+  }, []);
+
+  const handleResetFilters = () => {
+    setSelectedDistrict('');
+    setSelectedPlanningArea('');
+    setAppliedDistrict('');
+    setAppliedPlanningArea('');
+    setSelectedVendor(null);
+    setVbdPage(1);
+  };
+
+  const isFiltered = !!(appliedDistrict || appliedPlanningArea);
 
   // ── Derived ──
   const sc = statusQ.data?.data;
@@ -415,54 +501,109 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
           <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', marginTop: '4px', lineHeight: '1.4' }}>Tracks overflow demand offered to contracted 1099 providers, how much of it the network absorbs, and how well it's executed — end to end from offer to completion.</div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="daterange">
-            <div className="viewtoggle" style={{ marginRight: '8px', gap: '4px' }}>
-              <button className={`pbtn ${dateMode === 'month' ? 'on' : ''}`} onClick={() => setDateMode('month')}>Month</button>
-              <button className={`pbtn ${dateMode === 'custom' ? 'on' : ''}`} onClick={() => setDateMode('custom')}>Custom</button>
-            </div>
-            {dateMode === 'month' ? (
-              <>
-                <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
-                  {format(new Date(startDate + 'T00:00:00'), 'MMMM yyyy')}
-                  <input ref={startDateRef} type="month" value={startDate.slice(0, 7)} onChange={(e) => {
-                    const val = e.target.value;
-                    if (!val) return;
-                    const first = `${val}-01`;
-                    const lastDay = new Date(Number(val.split('-')[0]), Number(val.split('-')[1]), 0).getDate();
-                    const last = `${val}-${String(lastDay).padStart(2, '0')}`;
-                    setStartDate(first);
-                    setEndDate(last);
-                  }} />
-                </span>
-                <svg onClick={() => startDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
-                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>From</span>
-                <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
-                  {format(new Date(startDate + 'T00:00:00'), 'MMM dd, yyyy')}
-                  <input ref={startDateRef} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                </span>
-                <svg onClick={() => startDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
-                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>To</span>
-                <span className="dr-input" onClick={() => endDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
-                  {format(new Date(endDate + 'T00:00:00'), 'MMM dd, yyyy')}
-                  <input ref={endDateRef} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                </span>
-                <svg onClick={() => endDateRef.current?.showPicker()} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, cursor: 'pointer' }}>
-                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </>
-            )}
-          </div>
           <div className="freshness">
             <span className="freshness-dot" />
             Updated {format(lastUpdated, 'MMM dd, yyyy')}
           </div>
+        </div>
+      </div>
+
+      {/* ── Filter Card ── */}
+      <div className="card-kairos" style={{ padding: '16px 18px', marginBottom: '16px' }}>
+
+        {/* Row 1: Geo filters + Reset */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          {/* District */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>District</span>
+            <select
+              value={selectedDistrict}
+              onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedPlanningArea(''); }}
+              style={{ background: 'var(--card-2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '5px 28px 5px 10px', fontSize: 'var(--fs-sm)', color: selectedDistrict ? 'var(--tx1)' : 'var(--tx3)', fontFamily: 'inherit', cursor: 'pointer', minWidth: '180px', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+            >
+              <option value="">All Districts</option>
+              {geoDistricts.map((d) => (
+                <option key={d.districtName} value={d.districtName}>{d.districtName}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Planning Area */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Planning Area</span>
+            <select
+              value={selectedPlanningArea}
+              onChange={(e) => setSelectedPlanningArea(e.target.value)}
+              disabled={availablePlanningAreas.length === 0}
+              style={{ background: 'var(--card-2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '5px 28px 5px 10px', fontSize: 'var(--fs-sm)', color: selectedPlanningArea ? 'var(--tx1)' : 'var(--tx3)', fontFamily: 'inherit', cursor: 'pointer', minWidth: '180px', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', opacity: availablePlanningAreas.length === 0 ? 0.4 : 1 }}
+            >
+              <option value="">All Planning Areas</option>
+              {availablePlanningAreas.map((pa) => (
+                <option key={pa.planningAreaName} value={pa.planningAreaName}>{pa.planningAreaName}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reset */}
+          <button
+            onClick={handleResetFilters}
+            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '6px 16px', fontSize: 'var(--fs-sm)', color: 'var(--tx2)', fontFamily: 'inherit', cursor: 'pointer' }}
+          >Reset</button>
+        </div>
+
+        {/* Row 2: Apply Filters */}
+        <div style={{ marginTop: '12px' }}>
+          <button
+            onClick={handleApplyFilters}
+            style={{ background: '#35d4c7', border: 'none', borderRadius: 'var(--r-sm)', padding: '7px 20px', fontSize: 'var(--fs-sm)', color: '#0d1117', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}
+          >Apply Filters</button>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: '1px', background: 'var(--border)', margin: '14px 0' }} />
+
+        {/* Row 3: Date Range presets */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px' }}>Date Range</span>
+          {(['today', 'wtd', 'mtd', 'last-week', 'last-month', 'qtd', 'custom'] as DatePreset[]).map((preset) => (
+            <button
+              key={preset}
+              onClick={() => applyPreset(preset)}
+              style={{
+                background: datePreset === preset ? 'transparent' : 'transparent',
+                border: datePreset === preset ? '1.5px solid #35d4c7' : '1px solid var(--border)',
+                borderRadius: '20px',
+                padding: '5px 14px',
+                fontSize: 'var(--fs-sm)',
+                color: datePreset === preset ? '#35d4c7' : 'var(--tx2)',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                fontWeight: datePreset === preset ? 600 : 400,
+                whiteSpace: 'nowrap',
+              }}
+            >{DATE_PRESET_LABELS[preset]}</button>
+          ))}
+        </div>
+
+        {/* Custom date pickers */}
+        {datePreset === 'custom' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>From</span>
+            <span className="dr-input" onClick={() => startDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+              {format(new Date(startDate + 'T00:00:00'), 'MMM dd, yyyy')}
+              <input ref={startDateRef} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </span>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)' }}>To</span>
+            <span className="dr-input" onClick={() => endDateRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+              {format(new Date(endDate + 'T00:00:00'), 'MMM dd, yyyy')}
+              <input ref={endDateRef} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </span>
+          </div>
+        )}
+
+        {/* Row 4: Showing label */}
+        <div style={{ marginTop: '10px', fontSize: 'var(--fs-xs)', color: 'var(--tx3)' }}>
+          Showing <strong style={{ color: 'var(--tx2)' }}>{DATE_PRESET_LABELS[datePreset]}</strong> · {fmtDate(startDate)} – {fmtDate(endDate)}
         </div>
       </div>
 

@@ -126,6 +126,22 @@ export type StatusCountsResponse = {
   message: string;
 };
 
+export type GeoHierarchyDistrict = {
+  districtName: string;
+  planningAreas: {
+    planningAreaName: string;
+    zipCodes: string[];
+  }[];
+};
+
+export type GeoHierarchyResponse = {
+  success: boolean;
+  data: {
+    districts: GeoHierarchyDistrict[];
+  };
+  message: string;
+};
+
 export type OrderTimingResponse = {
   success: boolean;
   data: {
@@ -182,6 +198,8 @@ export async function fetchVendors(page = 1, limit = 20): Promise<VendorsListRes
 export async function fetchCompletedJobs(params?: {
   startDate?: string;
   endDate?: string;
+  district?: string;
+  planningArea?: string;
 }): Promise<CompletedJobsResponse> {
   const { data } = await apiClient.get<CompletedJobsResponse>('/api/dashboard/jobs/completed', {
     params,
@@ -192,6 +210,8 @@ export async function fetchCompletedJobs(params?: {
 export async function fetchStatusCounts(params: {
   startDate: string;
   endDate: string;
+  district?: string;
+  planningArea?: string;
 }): Promise<StatusCountsResponse> {
   const { data } = await apiClient.get<StatusCountsResponse>('/api/dashboard/jobs/status-counts', {
     params,
@@ -199,8 +219,16 @@ export async function fetchStatusCounts(params: {
   return data;
 }
 
-export async function fetchOrderTiming(): Promise<OrderTimingResponse> {
-  const { data } = await apiClient.get<OrderTimingResponse>('/api/dashboard/jobs/order-timing');
+export async function fetchOrderTiming(params?: {
+  district?: string;
+  planningArea?: string;
+}): Promise<OrderTimingResponse> {
+  const { data } = await apiClient.get<OrderTimingResponse>('/api/dashboard/jobs/order-timing', { params });
+  return data;
+}
+
+export async function fetchGeoHierarchy(): Promise<GeoHierarchyResponse> {
+  const { data } = await apiClient.get<GeoHierarchyResponse>('/api/dashboard/geo-hierarchy');
   return data;
 }
 
@@ -219,6 +247,8 @@ export async function fetchVendorStatusRange(params: {
   page?: number;
   limit?: number;
   search?: string;
+  district?: string;
+  planningArea?: string;
 }): Promise<VendorStatusRangeResponse> {
   const { data } = await apiClient.get<VendorStatusRangeResponse>('/api/dashboard/vendors/jobs/range', {
     params,
@@ -230,6 +260,8 @@ export async function fetchVendorStatusRange(params: {
 export async function fetchAllVendorStatusRange(params: {
   startDate: string;
   endDate: string;
+  district?: string;
+  planningArea?: string;
 }): Promise<VendorStatusRow[]> {
   // First fetch to get total pages
   const firstPage = await fetchVendorStatusRange({ ...params, page: 1, limit: 100 });
