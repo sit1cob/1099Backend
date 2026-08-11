@@ -105,16 +105,19 @@ export type VendorStatusRangeResponse = {
     };
     totals: {
       totalVendors: number;
+      JOBS_OFFERED?: number;
+      JOBS_UNCLAIMED?: number;
+      JOBS_CLAIMED?: number;
+      JOBS_COMPLETED?: number;
+      JOBS_INPROGRESS?: number;
+      FIRST_TIME_FIX?: number;
+      JOBS_RESCHEDULED?: number;
+      PARTS_ORDERED?: number;
       JOB_CLAIMED?: number;
       JOB_IN_PROGRESS?: number;
       JOB_COMPLETED?: number;
       JOB_RESCHEDULED?: number;
       PART_ORDER_SUBMITTED?: number;
-      FIRST_TIME_FIX?: number;
-      JOBS_CLAIMED?: number;
-      JOBS_COMPLETED?: number;
-      JOBS_INPROGRESS?: number;
-      JOBS_RESCHEDULED?: number;
     };
   };
   message: string;

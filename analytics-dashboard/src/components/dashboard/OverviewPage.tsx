@@ -12,15 +12,12 @@ import {
 import {
   fetchVendors,
   fetchCompletedJobs,
-  fetchStatusCounts,
-  fetchStatusTimeSeries,
   fetchVendorStatusRange,
   fetchAllVendorStatusRange,
   fetchOrderTiming,
   fetchGeoHierarchy,
 } from '../../services/dashboardApi';
 import type {
-  TimeSeriesPoint,
   CompletedVendor,
   VendorStatusRow,
   Vendor,
@@ -172,22 +169,9 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
   // ── Data queries ──
 
-  const statusQ = useQuery({
-    queryKey: ['dash-status', startDate, endDate, appliedDistrict, appliedPlanningArea],
-    queryFn: () => fetchStatusCounts(dateParams),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-
   const completedQ = useQuery({
     queryKey: ['dash-completed', startDate, endDate, appliedDistrict, appliedPlanningArea],
     queryFn: () => fetchCompletedJobs(dateParams),
-    staleTime: 60000,
-  });
-
-  const trendQ = useQuery({
-    queryKey: ['dash-trend', trendPeriod],
-    queryFn: () => fetchStatusTimeSeries(trendPeriod),
     staleTime: 60000,
   });
 
@@ -277,13 +261,15 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const isFiltered = !!(appliedDistrict || appliedPlanningArea);
 
   // ── Derived ──
-  const sc = statusQ.data?.data;
+  const sc = vbdQ.data?.data?.totals;
   const otData = orderTimingQ.data?.data;
   const vbdTotals = vbdQ.data?.data?.totals;
 
   // Demand Funnel metrics (mapped to API fields: JOBS_OFFERED, CLAIM_RATE, JOBS_UNCLAIMED, JOBS_CLAIMED, JOBS_COMPLETED)
   const jobsOffered = sc?.JOBS_OFFERED ?? 0;
-  const claimRate = sc?.CLAIM_RATE ?? 0;
+  const claimRate = sc?.JOBS_OFFERED
+    ? Number(((sc.JOBS_CLAIMED ?? 0) / sc.JOBS_OFFERED * 100).toFixed(1))
+    : 0;
   const jobsUnclaimed = sc?.JOBS_UNCLAIMED ?? 0;
   const jobsClaimed = sc?.JOBS_CLAIMED ?? sc?.JOB_CLAIMED ?? 0;
   const jobsCompleted = sc?.JOBS_COMPLETED ?? sc?.JOB_COMPLETED ?? 0;
@@ -301,20 +287,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   }, [jobsOffered, jobsClaimed, jobsUnclaimed, jobsCompleted]);
 
   // ── Chart data ──
-  const rawChartData = useMemo(() => {
-    const raw = trendQ.data?.data?.data;
-    if (!raw) return [];
-    const periodsSet = new Set<string>();
-    Object.values(raw).forEach((pts) => pts.forEach((p) => periodsSet.add(p.period)));
-    return Array.from(periodsSet).sort().map((period) => {
-      const row: Record<string, string | number> = { period };
-      LINE_SERIES.forEach(({ key }) => {
-        const pt = raw[key]?.find((p: TimeSeriesPoint) => p.period === period);
-        row[key] = pt?.count ?? 0;
-      });
-      return row;
-    });
-  }, [trendQ.data]);
+  const rawChartData = useMemo<Record<string, string | number>[]>(() => [], []);
 
   // Filter data by custom/page date range, then aggregate into weekly/monthly buckets
   const chartData = useMemo(() => {
@@ -946,9 +919,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
 
         {/* Chart / Table */}
         <div style={{ padding: '0 18px 16px' }}>
-          {trendQ.isLoading ? (
-            <div className="h-56 animate-pulse rounded-lg" style={{ background: 'var(--app-bg)' }} />
-          ) : !chartData.length ? (
+          {!chartData.length ? (
             <div className="flex h-56 items-center justify-center" style={{ color: 'var(--tx3)' }}>No trend data</div>
           ) : trendView === 'chart' ? (
             <>
