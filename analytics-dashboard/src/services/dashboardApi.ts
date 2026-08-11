@@ -201,7 +201,7 @@ export async function fetchVendors(page = 1, limit = 20): Promise<VendorsListRes
 export async function fetchCompletedJobs(params?: {
   startDate?: string;
   endDate?: string;
-  district?: string;
+  districtName?: string;
   planningArea?: string;
 }): Promise<CompletedJobsResponse> {
   const { data } = await apiClient.get<CompletedJobsResponse>('/api/dashboard/jobs/completed', {
@@ -213,7 +213,7 @@ export async function fetchCompletedJobs(params?: {
 export async function fetchStatusCounts(params: {
   startDate: string;
   endDate: string;
-  district?: string;
+  districtName?: string;
   planningArea?: string;
 }): Promise<StatusCountsResponse> {
   const { data } = await apiClient.get<StatusCountsResponse>('/api/dashboard/jobs/status-counts', {
@@ -223,7 +223,7 @@ export async function fetchStatusCounts(params: {
 }
 
 export async function fetchOrderTiming(params?: {
-  district?: string;
+  districtName?: string;
   planningArea?: string;
 }): Promise<OrderTimingResponse> {
   const { data } = await apiClient.get<OrderTimingResponse>('/api/dashboard/jobs/order-timing', { params });
@@ -250,7 +250,7 @@ export async function fetchVendorStatusRange(params: {
   page?: number;
   limit?: number;
   search?: string;
-  district?: string;
+  districtName?: string;
   planningArea?: string;
 }): Promise<VendorStatusRangeResponse> {
   const { data } = await apiClient.get<VendorStatusRangeResponse>('/api/dashboard/vendors/jobs/range', {
@@ -263,7 +263,7 @@ export async function fetchVendorStatusRange(params: {
 export async function fetchAllVendorStatusRange(params: {
   startDate: string;
   endDate: string;
-  district?: string;
+  districtName?: string;
   planningArea?: string;
 }): Promise<VendorStatusRow[]> {
   // First fetch to get total pages

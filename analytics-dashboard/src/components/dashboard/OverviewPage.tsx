@@ -122,7 +122,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   }, [vendorDropdownOpen]);
 
   const geoParams = useMemo(() => ({
-    ...(appliedDistrict ? { district: appliedDistrict } : {}),
+    ...(appliedDistrict ? { districtName: appliedDistrict } : {}),
     ...(appliedPlanningArea ? { planningArea: appliedPlanningArea } : {}),
   }), [appliedDistrict, appliedPlanningArea]);
 
