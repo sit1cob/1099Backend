@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { VendorDetailPage } from './VendorDetailPage';
 import {
   LineChart,
   Line,
@@ -89,6 +90,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const [vbdSearch, setVbdSearch] = useState('');
   const [vbdPage, setVbdPage] = useState(1);
   const [selectedVendor, setSelectedVendor] = useState<{ id: number; name?: string } | null>(null);
+  const [vendorDetail, setVendorDetail] = useState<{ id: number; name: string } | null>(null);
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
   const [vendorDropdownSearch, setVendorDropdownSearch] = useState('');
   const [trendFrom, setTrendFrom] = useState('2026-05-16');
@@ -464,6 +466,19 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const vendorTotalPages = Math.ceil(allVendorsFiltered.length / 20);
   const vendorsPageSlice = allVendorsFiltered.slice((vendorPage - 1) * 20, vendorPage * 20);
   const lastUpdated = new Date();
+
+  // Vendor detail page
+  if (vendorDetail) {
+    return (
+      <VendorDetailPage
+        vendorId={vendorDetail.id}
+        vendorName={vendorDetail.name}
+        startDate={startDate}
+        endDate={endDate}
+        onBack={() => setVendorDetail(null)}
+      />
+    );
+  }
 
   return (
     <div>
@@ -1042,7 +1057,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                     const s = v.statusCounts;
                     const rank = (vbdPage - 1) * 20 + i + 1;
                     return (
-                      <tr key={v.vendorId}>
+                      <tr key={v.vendorId} style={{ cursor: 'pointer' }} onClick={() => setVendorDetail({ id: v.vendorId, name: v.vendorName })}>
                         <td className="font-mono" style={{ color: 'var(--tx3)', fontSize: 'var(--fs-xs)' }}>{rank}</td>
                         <td>
                           <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600, color: 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>

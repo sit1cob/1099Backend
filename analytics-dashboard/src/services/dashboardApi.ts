@@ -286,6 +286,64 @@ export async function fetchAllVendorStatusRange(params: {
   return allVendors;
 }
 
+// Vendor Service Orders (detail page)
+export type VendorServiceOrder = {
+  id: number;
+  soNumber: string;
+  status: string;
+  createdAt: string;
+  scheduledDate: string | null;
+  customerName: string;
+  customerCity: string;
+  customerZip: string;
+  applianceType: string;
+  manufacturerBrand: string;
+  serviceDescription: string;
+  customerType: string;
+  isRecall: boolean;
+  assignment: {
+    jobId: number;
+    status: string;
+    assignedAt: string | null;
+    arrivedAt: string | null;
+    completedAt: string | null;
+    completionType: string | null;
+    completionNotes: string | null;
+  } | null;
+};
+
+export type VendorServiceOrdersResponse = {
+  success: boolean;
+  data: {
+    vendor: { id: number; name: string };
+    jobs: VendorServiceOrder[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+    statusCounts: {
+      JOBS_OFFERED: number;
+      JOBS_UNCLAIMED: number;
+      JOBS_CLAIMED: number;
+      JOBS_COMPLETED: number;
+      JOBS_INPROGRESS: number;
+    };
+  };
+  message: string;
+};
+
+export async function fetchVendorServiceOrders(params: {
+  vendorId: number;
+  startDate: string;
+  endDate: string;
+  page?: number;
+  limit?: number;
+}): Promise<VendorServiceOrdersResponse> {
+  const { vendorId, ...rest } = params;
+  const { data } = await apiClient.get<VendorServiceOrdersResponse>(
+    `/api/dashboard/vendors/${vendorId}/service-orders`,
+    { params: rest },
+  );
+  return data;
+}
+
 export async function fetchVendorJobs(vendorId: number): Promise<VendorJobsResponse> {
   const { data } = await apiClient.get<VendorJobsResponse>(
     `/api/dashboard/vendors/${vendorId}/jobs`,
