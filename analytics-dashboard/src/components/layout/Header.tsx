@@ -6,6 +6,7 @@ type HeaderProps = {
   onSettingsClick?: () => void;
   onExportClick?: () => void;
   onNavigate?: (page: string) => void;
+  onLogout?: () => void;
 };
 
 const SEARCH_PAGES = [
@@ -32,7 +33,7 @@ const PageIcon = ({ type }: { type: string }) => {
   }
 };
 
-export function Header({ activePage = 'Overview', onSettingsClick, onExportClick, onNavigate }: HeaderProps) {
+export function Header({ activePage = 'Overview', onSettingsClick, onExportClick, onNavigate, onLogout }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
@@ -217,6 +218,18 @@ export function Header({ activePage = 'Overview', onSettingsClick, onExportClick
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
           Export
+        </button>
+        {/* Logout */}
+        <button
+          onClick={onLogout}
+          title="Sign out"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--border)] text-[var(--tx2)] transition-all hover:bg-[var(--card-2)] hover:text-[#f87171] hover:border-[var(--border-2)]"
+          style={{ background: 'var(--app-bg)', fontSize: '12px', fontWeight: 500 }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          Sign out
         </button>
         {/* Avatar */}
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[12px] font-bold ml-1 flex-shrink-0" style={{ background: 'linear-gradient(135deg, #0048BB, #010F43)' }}>

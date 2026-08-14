@@ -8,9 +8,11 @@ import { LoginUsersTable } from './components/LoginUsersTable';
 import { FeedbackTable } from './components/FeedbackTable';
 import { LiveEvents } from './components/LiveEvents';
 import { SettingsModal, type DashboardSettings } from './components/layout/SettingsModal';
+import { LoginPage } from './components/LoginPage';
 import { ThemeProvider } from './context/ThemeContext';
 import { fetchFeedback, fetchLoginUsers } from './services/api';
 import { fetchVendors, fetchCompletedJobs } from './services/dashboardApi';
+import { isAuthenticated, logout } from './services/auth';
 import { format } from 'date-fns';
 
 const oneMonthAgo = new Date();
@@ -28,16 +30,22 @@ const DEFAULT_SETTINGS: DashboardSettings = {
 };
 
 function App() {
+  const [authed, setAuthed] = useState(isAuthenticated());
   const [activePage, setActivePage] = useState('Overview');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS);
+
+  const handleLogout = useCallback(async () => {
+    setAuthed(false);
+    await logout();
+  }, []);
 
   const loginUsersQuery = useQuery({
     queryKey: ['analytics-login-users'],
     queryFn: () => fetchLoginUsers({ limit: 1000 }),
     refetchInterval: 60000,
     staleTime: 60000,
-    enabled: activePage === 'Unique Users',
+    enabled: authed && activePage === 'Unique Users',
   });
 
   const feedbackQuery = useQuery({
@@ -45,6 +53,7 @@ function App() {
     queryFn: () => fetchFeedback(200),
     refetchInterval: 30000,
     staleTime: 30000,
+    enabled: authed,
   });
 
   const feedbackCount = feedbackQuery.data?.data?.length ?? 0;
@@ -111,6 +120,14 @@ function App() {
     }
   }, [settings.startDate, settings.endDate]);
 
+  if (!authed) {
+    return (
+      <ThemeProvider>
+        <LoginPage onLoginSuccess={() => setAuthed(true)} />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
     <div className="min-h-screen flex" style={{ background: 'var(--app-bg)', color: 'var(--tx1)' }}>
@@ -118,7 +135,7 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col" style={{ minHeight: '100vh' }}>
-        <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onNavigate={setActivePage} />
+        <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onNavigate={setActivePage} onLogout={handleLogout} />
         <main className="flex-1 p-6 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
           {activePage === 'Overview' && <OverviewPage onNavigate={setActivePage} initialStartDate={settings.startDate} initialEndDate={settings.endDate} />}
 

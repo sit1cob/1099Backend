@@ -1,11 +1,20 @@
 import axios from 'axios';
 import type { AnalyticsFilter, AnalyticsResponse, AnalyticsUserSummary, LoginUserSummary } from '../types';
+import { getAccessToken } from './auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://1099backend.searskairos.ai';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+});
+
+client.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export async function fetchAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsResponse> {

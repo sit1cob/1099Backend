@@ -1,10 +1,19 @@
 import axios from 'axios';
+import { getAccessToken } from './auth';
 
 const BASE_URL = 'https://1099backend.searskairos.ai';
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
   timeout: 30000,
+});
+
+apiClient.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // --- Types ---
@@ -84,12 +93,13 @@ export type VendorStatusRow = {
     JOB_COMPLETED?: number;
     JOB_RESCHEDULED?: number;
     PART_ORDER_SUBMITTED?: number;
-    PARTS_ORDERED?: number;
     FIRST_TIME_FIX?: number;
+    JOBS_OFFERED?: number;
     JOBS_CLAIMED?: number;
     JOBS_COMPLETED?: number;
     JOBS_INPROGRESS?: number;
     JOBS_RESCHEDULED?: number;
+    PARTS_ORDERED?: number;
   };
 };
 

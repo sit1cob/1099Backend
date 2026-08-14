@@ -1033,6 +1033,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                 <tr>
                   <th style={{ width: '28px' }}>#</th>
                   <th>Vendor</th>
+                  <th style={{ textAlign: 'right', width: '80px' }}>Offered</th>
                   <th style={{ textAlign: 'right', width: '90px' }}>Completed</th>
                   <th style={{ textAlign: 'right', width: '80px' }}>Claimed</th>
                   <th style={{ textAlign: 'right', width: '100px' }}>In Progress</th>
@@ -1043,9 +1044,9 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
               </thead>
               <tbody>
                 {vbdQ.isLoading ? (
-                  <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+                  <tr><td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
                 ) : filteredByVendor.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                  <tr><td colSpan={9} style={{ padding: '40px 24px', textAlign: 'center' }}>
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
                         <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                       </svg>
@@ -1063,6 +1064,7 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
                           <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600, color: 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>
                           <div className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>ID: {v.vendorId}</div>
                         </td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{(s.JOBS_OFFERED ?? 0).toLocaleString()}</td>
                         <td className="font-mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{(s.JOBS_COMPLETED ?? s.JOB_COMPLETED ?? 0).toLocaleString()}</td>
                         <td className="font-mono" style={{ textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{(s.JOBS_CLAIMED ?? s.JOB_CLAIMED ?? 0).toLocaleString()}</td>
                         <td className="font-mono" style={{ textAlign: 'right', color: '#fbbf24', fontWeight: 600 }}>{(s.JOBS_INPROGRESS ?? s.JOB_IN_PROGRESS ?? 0).toLocaleString()}</td>
