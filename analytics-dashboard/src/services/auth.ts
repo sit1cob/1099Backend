@@ -30,6 +30,11 @@ export async function login(username: string, password: string): Promise<LoginRe
     { username, password },
   );
   if (data.success && data.data) {
+    // Only allow admin users to login
+    const role = data.data.user?.role ?? '';
+    if (!role.includes('admin')) {
+      return { success: false, message: 'Access denied. Only admin users can access this dashboard.' };
+    }
     setTokens(data.data.accessToken, data.data.refreshToken);
     localStorage.setItem(USER_KEY, JSON.stringify(data.data.user));
   }
