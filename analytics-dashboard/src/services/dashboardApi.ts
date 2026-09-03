@@ -361,6 +361,78 @@ export async function fetchVendorJobs(vendorId: number): Promise<VendorJobsRespo
   return data;
 }
 
+// KRIS 1099 Vendor API Usage
+export type KrisVendorStatusRow = {
+  vendorId: number;
+  vendorName: string;
+  statusCounts: {
+    LOGINS?: number;
+    JOBS_CLAIMED?: number;
+    JOBS_COMPLETED?: number;
+    JOBS_RESCHEDULED?: number;
+    PARTS_ORDERED?: number;
+  };
+};
+
+export type KrisVendorApiUsageResponse = {
+  success: boolean;
+  data: {
+    data: KrisVendorStatusRow[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+    totals: {
+      totalVendors: number;
+      LOGINS?: number;
+      JOBS_CLAIMED?: number;
+      JOBS_COMPLETED?: number;
+      JOBS_RESCHEDULED?: number;
+      PARTS_ORDERED?: number;
+    };
+  };
+  message: string;
+};
+
+export async function fetchKrisVendorApiUsage(params: {
+  startDate: string;
+  endDate: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<KrisVendorApiUsageResponse> {
+  const { data } = await apiClient.get<KrisVendorApiUsageResponse>(
+    '/api/dashboard/kris-api-usage/vendors',
+    { params },
+  );
+  return data;
+}
+
+// Fetch ALL KRIS vendors by fetching all pages in parallel (used for client-side search + CSV export)
+export async function fetchAllKrisVendorApiUsage(params: {
+  startDate: string;
+  endDate: string;
+}): Promise<KrisVendorStatusRow[]> {
+  const firstPage = await fetchKrisVendorApiUsage({ ...params, page: 1, limit: 100 });
+  const totalPages = firstPage.data?.pagination?.totalPages ?? 1;
+  const allVendors: KrisVendorStatusRow[] = [...(firstPage.data?.data ?? [])];
+
+  if (totalPages > 1) {
+    const pagePromises = [];
+    for (let page = 2; page <= totalPages; page++) {
+      pagePromises.push(fetchKrisVendorApiUsage({ ...params, page, limit: 100 }));
+    }
+    const results = await Promise.all(pagePromises);
+    for (const result of results) {
+      allVendors.push(...(result.data?.data ?? []));
+    }
+  }
+
+  return allVendors;
+}
+
 export async function fetchVendorJobsRange(
   vendorId: number,
   startDate: string,

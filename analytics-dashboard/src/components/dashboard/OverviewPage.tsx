@@ -17,12 +17,15 @@ import {
   fetchAllVendorStatusRange,
   fetchOrderTiming,
   fetchGeoHierarchy,
+  fetchKrisVendorApiUsage,
+  fetchAllKrisVendorApiUsage,
 } from '../../services/dashboardApi';
 import type {
   CompletedVendor,
   VendorStatusRow,
   Vendor,
   GeoHierarchyDistrict,
+  KrisVendorStatusRow,
 } from '../../services/dashboardApi';
 
 // ─── KPI Card Config ─────────────────────────────────────────────────
@@ -89,6 +92,8 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
   const [vendorSearch, setVendorSearch] = useState('');
   const [vbdSearch, setVbdSearch] = useState('');
   const [vbdPage, setVbdPage] = useState(1);
+  const [krisSearch, setKrisSearch] = useState('');
+  const [krisPage, setKrisPage] = useState(1);
   const [selectedVendor, setSelectedVendor] = useState<{ id: number; name?: string } | null>(null);
   const [vendorDetail, setVendorDetail] = useState<{ id: number; name: string } | null>(null);
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
@@ -193,6 +198,18 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
     queryKey: ['dash-vbd', startDate, endDate, vbdPage, vbdSearch, appliedDistrict, appliedPlanningArea],
     queryFn: () => fetchVendorStatusRange({ startDate, endDate, page: vbdPage, limit: 20, search: vbdSearch || undefined, ...geoParams }),
     staleTime: 60000,
+  });
+
+  const krisVendorQ = useQuery({
+    queryKey: ['dash-kris-vendors', startDate, endDate, krisPage],
+    queryFn: () => fetchKrisVendorApiUsage({ startDate, endDate, page: krisPage, limit: 20 }),
+    staleTime: 60000,
+  });
+
+  const allKrisVendorsQ = useQuery({
+    queryKey: ['dash-kris-vendors-all', startDate, endDate],
+    queryFn: () => fetchAllKrisVendorApiUsage({ startDate, endDate }),
+    staleTime: 120000,
   });
 
   const orderTimingQ = useQuery({
@@ -420,6 +437,32 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
     });
     downloadCsv(`kairos-vendor-breakdown_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
   }, [allDropdownVendors, downloadCsv]);
+
+  const krisRows: KrisVendorStatusRow[] = krisVendorQ.data?.data?.data ?? [];
+  const krisPagination = krisVendorQ.data?.data?.pagination;
+  const krisTotals = krisVendorQ.data?.data?.totals;
+  const allKrisVendors: KrisVendorStatusRow[] = allKrisVendorsQ.data ?? [];
+
+  const isKrisSearching = !!krisSearch.trim();
+  const filteredKrisVendors = useMemo(() => {
+    // When searching, filter across ALL vendors client-side; otherwise use the paginated page
+    return isKrisSearching
+      ? allKrisVendors.filter((v) =>
+          v.vendorName.toLowerCase().includes(krisSearch.toLowerCase()) ||
+          String(v.vendorId).includes(krisSearch),
+        )
+      : krisRows;
+  }, [krisRows, allKrisVendors, krisSearch, isKrisSearching]);
+
+  const exportKrisCsv = useCallback(() => {
+    if (!allKrisVendors.length) return;
+    const header = 'Vendor,ID,Logins,Jobs Claimed,Jobs Completed,Jobs Rescheduled,Parts Ordered';
+    const rows = allKrisVendors.map((v) => {
+      const s = v.statusCounts;
+      return [`"${v.vendorName}"`, v.vendorId, s.LOGINS ?? 0, s.JOBS_CLAIMED ?? 0, s.JOBS_COMPLETED ?? 0, s.JOBS_RESCHEDULED ?? 0, s.PARTS_ORDERED ?? 0].join(',');
+    });
+    downloadCsv(`kris-1099-vendor-breakdown_${format(new Date(), 'yyyy-MM-dd')}.csv`, header, rows);
+  }, [allKrisVendors, downloadCsv]);
 
   const exportVendorsCsv = useCallback(() => {
     const v = vendorsQ.data?.data?.data;
@@ -1111,6 +1154,112 @@ export function OverviewPage({ onNavigate, initialStartDate, initialEndDate }: {
         </div>
       </div>
 
+      {/* ── 04 KRIS 1099 Vendor Breakdown ── */}
+      <div style={{ marginBottom: 'var(--sp-4)' }}>
+        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginBottom: '4px' }}>04</div>
+        <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700, color: 'var(--tx1)', marginBottom: '12px' }}>KRIS 1099 Vendor Breakdown</div>
+
+        <div className="card-kairos">
+          <div style={{ padding: '16px 18px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--tx1)' }}>Per-Vendor API Usage</div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>{fmtDate(startDate)} – {fmtDate(endDate)} · {fmt(krisTotals?.totalVendors)} vendors</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="card-search">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--tx3)' }}>
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  placeholder="Search vendor…"
+                  value={krisSearch}
+                  onChange={(e) => { setKrisSearch(e.target.value); setKrisPage(1); }}
+                  style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--tx1)', fontSize: 'var(--fs-sm)', fontFamily: 'inherit', width: '120px' }}
+                />
+              </div>
+              <button className="ch-action" style={{ fontSize: 'var(--fs-sm)' }} onClick={exportKrisCsv}>↓ CSV</button>
+            </div>
+          </div>
+
+          <div className="card-scroll-wrap" style={{ maxHeight: '480px' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: '28px' }}>#</th>
+                  <th>Vendor</th>
+                  <th style={{ textAlign: 'right', width: '80px' }}>Logins</th>
+                  <th style={{ textAlign: 'right', width: '100px' }}>Jobs Claimed</th>
+                  <th style={{ textAlign: 'right', width: '110px' }}>Jobs Completed</th>
+                  <th style={{ textAlign: 'right', width: '110px' }}>Jobs Rescheduled</th>
+                  <th style={{ textAlign: 'right', width: '110px' }}>Parts Ordered</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(krisVendorQ.isLoading || (isKrisSearching && allKrisVendorsQ.isLoading)) ? (
+                  <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--tx3)' }}>Loading...</td></tr>
+                ) : filteredKrisVendors.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: '40px 24px', textAlign: 'center' }}>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}>
+                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <p style={{ fontSize: 'var(--fs-md)', color: 'var(--tx2)', fontWeight: 500, marginBottom: '4px' }}>No results found</p>
+                      <p style={{ fontSize: 'var(--fs-base)', color: 'var(--tx3)' }}>Try a different search or widen the date window</p>
+                    </td></tr>
+                ) : (
+                  (isKrisSearching ? filteredKrisVendors.slice((krisPage - 1) * 20, krisPage * 20) : filteredKrisVendors).map((v, i) => {
+                    const s = v.statusCounts;
+                    const rank = (krisPage - 1) * 20 + i + 1;
+                    return (
+                      <tr key={v.vendorId}>
+                        <td className="font-mono" style={{ color: 'var(--tx3)', fontSize: 'var(--fs-xs)' }}>{rank}</td>
+                        <td>
+                          <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600, color: 'var(--tx1)', lineHeight: 'var(--lh-tight)' }}>{v.vendorName}</div>
+                          <div className="font-mono" style={{ fontSize: 'var(--fs-xs)', color: 'var(--tx3)', marginTop: '2px' }}>ID: {v.vendorId}</div>
+                        </td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: 'var(--tx1)', fontWeight: 600 }}>{(s.LOGINS ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#5484d1', fontWeight: 600 }}>{(s.JOBS_CLAIMED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>{(s.JOBS_COMPLETED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#D95459', fontWeight: 600 }}>{(s.JOBS_RESCHEDULED ?? 0).toLocaleString()}</td>
+                        <td className="font-mono" style={{ textAlign: 'right', color: '#a78bfa', fontWeight: 600 }}>{(s.PARTS_ORDERED ?? 0).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {((isKrisSearching && filteredKrisVendors.length > 0) || (krisPagination && krisPagination.totalPages > 0)) && (() => {
+            const total = isKrisSearching ? filteredKrisVendors.length : (krisPagination?.total ?? 0);
+            const totalPages = isKrisSearching ? Math.ceil(total / 20) : (krisPagination?.totalPages ?? 0);
+            const from = (krisPage - 1) * 20 + 1;
+            const to = Math.min(krisPage * 20, total);
+            const pages: number[] = [];
+            [1, 2, krisPage - 1, krisPage, krisPage + 1, totalPages - 1, totalPages].forEach((n) => {
+              if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n);
+            });
+            pages.sort((a, b) => a - b);
+            return (
+              <div className="pgbar">
+                <span style={{ color: 'var(--tx3)', fontSize: 'var(--fs-sm)' }}>
+                  Showing <strong style={{ color: 'var(--tx1)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--tx1)' }}>{total}</strong> vendors
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button className="pgbtn" disabled={krisPage <= 1} onClick={() => setKrisPage(krisPage - 1)}>‹ Prev</button>
+                  {pages.map((n, idx) => (
+                    <span key={n}>
+                      {idx > 0 && n - pages[idx - 1] > 1 && <span style={{ color: 'var(--tx3)', padding: '0 2px' }}>…</span>}
+                      <button className={`pgbtn ${n === krisPage ? 'on' : ''}`} onClick={() => setKrisPage(n)}>{n}</button>
+                    </span>
+                  ))}
+                  <button className="pgbtn" disabled={krisPage >= totalPages} onClick={() => setKrisPage(krisPage + 1)}>Next ›</button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
 
     </div>
   );
