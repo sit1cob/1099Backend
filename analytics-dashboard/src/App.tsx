@@ -5,12 +5,12 @@ import { Header } from './components/layout/Header';
 import { OverviewPage } from './components/dashboard/OverviewPage';
 import { OperationsPage } from './components/dashboard/OperationsPage';
 import { LoginUsersTable } from './components/LoginUsersTable';
-import { FeedbackTable } from './components/FeedbackTable';
+import { FeedbackReportTable } from './components/FeedbackReportTable';
 import { LiveEvents } from './components/LiveEvents';
 import { SettingsModal, type DashboardSettings } from './components/layout/SettingsModal';
 import { LoginPage } from './components/LoginPage';
 import { ThemeProvider } from './context/ThemeContext';
-import { fetchFeedback, fetchLoginUsers } from './services/api';
+import { fetchFeedbackReport, fetchLoginUsers, getAuthToken, setAuthToken, clearAuthToken } from './services/api';
 import { fetchVendors, fetchCompletedJobs } from './services/dashboardApi';
 import { isAuthenticated, logout } from './services/auth';
 import { format } from 'date-fns';
@@ -34,6 +34,9 @@ function App() {
   const [activePage, setActivePage] = useState('Overview');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS);
+  const [adminToken, setAdminToken] = useState(() => getAuthToken() || '');
+  const [tokenInput, setTokenInput] = useState('');
+  const [filteredFeedbackCount, setFilteredFeedbackCount] = useState(0);
 
   const handleLogout = useCallback(async () => {
     setAuthed(false);
@@ -49,14 +52,23 @@ function App() {
   });
 
   const feedbackQuery = useQuery({
-    queryKey: ['feedback'],
-    queryFn: () => fetchFeedback(200),
+    queryKey: ['feedback-report', adminToken],
+    queryFn: () => fetchFeedbackReport(200),
     refetchInterval: 30000,
     staleTime: 30000,
-    enabled: authed,
+    enabled: authed && activePage === 'Feedback' && !!adminToken,
+    retry: false,
   });
 
-  const feedbackCount = feedbackQuery.data?.data?.length ?? 0;
+  const handleSaveToken = () => {
+    if (tokenInput.trim()) {
+      setAuthToken(tokenInput.trim());
+      setAdminToken(tokenInput.trim());
+      setTokenInput('');
+    }
+  };
+
+  // Use filtered count instead of API count (which includes test vendors)
 
   const handleExport = useCallback(async () => {
     try {
@@ -135,7 +147,7 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col" style={{ minHeight: '100vh' }}>
-        <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onNavigate={setActivePage} onLogout={handleLogout} />
+        <Header activePage={activePage} onSettingsClick={() => setSettingsOpen(true)} onExportClick={handleExport} onFeedbackClick={() => setActivePage('Feedback')} onNavigate={setActivePage} onLogout={handleLogout} />
         <main className="flex-1 p-6 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
           {activePage === 'Overview' && <OverviewPage onNavigate={setActivePage} initialStartDate={settings.startDate} initialEndDate={settings.endDate} />}
 
@@ -156,12 +168,62 @@ function App() {
             <div>
               <div className="mb-5">
                 <h2 className="text-[24px] font-bold leading-tight" style={{ color: 'var(--tx1)' }}>User Feedback</h2>
-                <p className="text-[13px]" style={{ color: 'var(--tx3)' }}>All feedback submissions from mobile app users</p>
+                <p className="text-[13px]" style={{ color: 'var(--tx3)' }}>All feedback submissions from mobile app users {filteredFeedbackCount > 0 && `(${filteredFeedbackCount} total)`}</p>
               </div>
-              <FeedbackTable
-                data={feedbackQuery.data?.data ?? []}
-                isLoading={feedbackQuery.isFetching}
-              />
+              
+              {/* Token required notice */}
+              {!adminToken && (
+                <div className="rounded-xl border p-6 mb-4" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+                  <div className="flex items-start gap-3">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--yellow, #eab308)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex-1">
+                      <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--tx1)' }}>Admin Authentication Required</h3>
+                      <p className="text-[13px] mb-3" style={{ color: 'var(--tx3)' }}>Enter your admin access token to view feedback data.</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="Paste your admin token here..."
+                          value={tokenInput}
+                          onChange={(e) => setTokenInput(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveToken()}
+                          className="flex-1 px-3 py-2 rounded-lg border text-[13px]"
+                          style={{ background: 'var(--app-bg)', borderColor: 'var(--border)', color: 'var(--tx1)', outline: 'none' }}
+                        />
+                        <button
+                          onClick={handleSaveToken}
+                          className="px-4 py-2 rounded-lg text-[13px] font-medium text-white"
+                          style={{ background: 'var(--blue)' }}
+                        >
+                          Authenticate
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Error handling */}
+              {adminToken && feedbackQuery.isError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 mb-4">
+                  <p className="text-[13px] text-red-400">Failed to load feedback. Token may be invalid or expired.</p>
+                  <button
+                    onClick={() => { setAdminToken(''); clearAuthToken(); }}
+                    className="mt-2 text-[12px] text-red-400 underline"
+                  >
+                    Clear token and try again
+                  </button>
+                </div>
+              )}
+
+              {adminToken && !feedbackQuery.isError && (
+                <FeedbackReportTable
+                  data={feedbackQuery.data?.data ?? []}
+                  isLoading={feedbackQuery.isFetching}
+                  onFilteredCountChange={setFilteredFeedbackCount}
+                />
+              )}
             </div>
           )}
 
