@@ -9,7 +9,7 @@ const client = axios.create({
   withCredentials: true,
 });
 
-// Add auth token to all requests
+// Add auth token to all requests (used by all APIs including feedback)
 client.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
@@ -17,27 +17,6 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
-
-// Auth token management for admin-only APIs (feedback report)
-const AUTH_TOKEN_KEY = 'kairos_admin_token';
-
-export function setAuthToken(token: string) {
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-}
-
-export function getAuthToken(): string | null {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
-}
-
-export function clearAuthToken() {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-}
-
-// Create authenticated client for admin APIs
-function getAuthHeaders() {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 export async function fetchAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsResponse> {
   const params = new URLSearchParams();
@@ -168,8 +147,7 @@ export type FeedbackReportResponse = {
 };
 
 export async function fetchFeedbackReport(limit: number = 100): Promise<FeedbackReportResponse> {
-  const { data } = await client.get<FeedbackReportResponse>(`/api/feedback/report?limit=${limit}`, {
-    headers: getAuthHeaders(),
-  });
+  // Uses the same auth token as other APIs (via interceptor)
+  const { data } = await client.get<FeedbackReportResponse>(`/api/feedback/report?limit=${limit}`);
   return data;
 }
